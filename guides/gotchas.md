@@ -59,6 +59,9 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   `template`, then the PR goes to that branch.
 - **Mod PRs get less checking than image PRs.** There is no schema validation in CI and no report comment,
   so run `tools/check-branch.sh` and `tools/test-mod.sh` yourself.
+- **Name a playground mod in full:** `DOCKER_MODS=ghcr.io/linuxserver-playground/mods:<tag>`. The base images'
+  mod script (upstream's `docker-mods.v3`, unchanged) sends `linuxserver-playground/mods:<tag>` to Docker Hub,
+  where it does not exist.
 
 ## Data and the site
 

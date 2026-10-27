@@ -58,7 +58,7 @@ them after merge. The one exception is a new repo's first PR, which carries ever
 ## Namespaces
 
 - Everything references `linuxserver-playground` only. The exceptions are links to upstream docs and the
-  images the playground does not build yet (selkies-layers, proot-apps).
+  few references `repos/workspace/docs/playground-references.md` lists as still pointing at `linuxserver`.
 - Images build `FROM ghcr.io/linuxserver-playground/baseimage-*`.
 - When you must rewrite a reference to the playground, add a row to
   `repos/workspace/docs/playground-references.md`, so it can be swapped back at the cutover.
