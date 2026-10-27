@@ -69,6 +69,10 @@ Control replaces every per-repo cron:
 - hourly upstream checks, using the typed `upstream.version` source in `image.yml`;
 - hourly release checks;
 - weekly package checks (`Update package versions` commits, which deliberately do start a build).
+- hourly mod checks, for the docker-mods branches whose `mod.yml` has an `upstream` block (the Jenkins
+  External-Triggers jobs): the same resolver, then GHCR is asked whether `mods:<branch>-<version>` exists; when
+  it does not, the branch's `build.yml` is dispatched with `mod_version`. Decisions show as image `mods`, kind
+  `mod`. `control/mods.py`; discovery reads every branch's `mod.yml` every 30 minutes.
 - the batch build projects (proot-apps daily 00:00 UTC, selkies-layers daily 04:30, wheelie's gap check
   hourly): each run is dispatched with a `parallel` sized to the slots free after a reserve of 4 for image, hub
   and site builds (2 to 16), and Discord hears when a unit (a layer, an app, a wheel) starts failing or
