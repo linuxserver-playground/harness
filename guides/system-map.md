@@ -8,8 +8,8 @@ either, they win. Then fix this guide.
 
 | What | Where | Who reads it |
 | --- | --- | --- |
-| Website: images, build pages, fleet board, docs, blog, mods, stores | https://linuxserver-playground.github.io/site/ | users and the team. It is the single pane of glass |
-| Hub: static API, store templates, proxy confs, k8s manifests, mods index | https://linuxserver-playground.github.io/hub/ (`openapi.json` lists the endpoints) | the site, the stores, agents |
+| Website: images, build pages, fleet board, docs, blog, mods, PRoot Apps, stores | https://linuxserver-playground.github.io/site/ | users and the team. It is the single pane of glass |
+| Hub: static API, store templates, proxy confs, k8s manifests, mods index, PRoot Apps index | https://linuxserver-playground.github.io/hub/ (`openapi.json` lists the endpoints) | the site, the stores, agents |
 | Control plane: scheduler, webhooks, live JSON API, member actions, Discord | https://ci.thelamer.duckdns.org:8443 (`/status`, `/api/*.json`) | the site's fleet pages, the team, agents |
 | Images | `ghcr.io/linuxserver-playground/<name>` | users |
 | Branch builds, PR builds, staging | `ghcr.io/linuxserver-playground/dev/<name>`, `untrusted-pr/<name>`, `build/<name>` | reviewers |
@@ -22,7 +22,7 @@ either, they win. Then fix this guide.
 | `workflows` | The reusable `image-build.yml` and `mod-build.yml`, one composite action per step, and `pr-report.yml` | The floating tag `v1` moves to the new commit. Image repos call `@v1` |
 | `ci` | The container test harness. It runs each built image, takes screenshots, and writes the test report and bundle | Push to main publishes `ci:latest`, which the workflows pull |
 | `dumper` | A Rust static file-tree walker for the bundle | A GitHub Release. The workflows fetch `releases/latest` |
-| `hub` | Ingests each release's `build.json` and `record.json` into `data/`, serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index and build pages. `refresh.yml` runs hourly: stars, GHCR tags, mods, vulnerability rescans, and pushes the store repos | A push to main, the hourly refresh, or `repository_dispatch image-released` |
+| `hub` | Ingests each release's `build.json` and `record.json` into `data/`, serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index, the PRoot Apps index and build pages. `refresh.yml` runs hourly: stars, GHCR tags, mods, PRoot Apps (proot-apps' `metadata.yml`), vulnerability rescans, and pushes the store repos | A push to main, the hourly refresh, or `repository_dispatch image-released` |
 | `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | A push to main, `hub-updated` (relayed by control after every hub deploy), or the daily cron |
 | `control` | A FastAPI GitHub App on a small server (n97). It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the server pulls it within 5 minutes |
 | `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
@@ -114,7 +114,7 @@ repo's `image.yml`. Adding an image needs no change to control, the hub or the s
 | --- | --- | --- |
 | README, AGENTS.md, LICENSE, `build.yml`, `pr-report.yml` in an image repo | `builder render` (live build) | `image.yml` + `builder/templates/` |
 | Docs page, snippets, store templates, proxy confs, k8s, quadlets | hub generators | `image.yml` of every live branch |
-| Image page, build pages, packages, mods, stores pages | site | hub API snapshots (`src/data/`) |
+| Image page, build pages, packages, mods, PRoot Apps, stores pages | site | hub API snapshots (`src/data/`) |
 | Build page data (tests, diffs, vulns, layers) | the build (`builder record`), indexed by the hub | the release bundle |
 | Fleet board | site, live from control | control `/api/*.json` |
 
