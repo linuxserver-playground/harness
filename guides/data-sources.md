@@ -57,7 +57,7 @@ response wraps its payload in `data`.
 | `/api/v1/fleet/bases.json` | Every base image and the images built FROM it (`data.bases[]`: `image`, `images[]`, `digests[]`) |
 | `/api/v1/fleet/staleness.json` | Builds on an older base digest than the newest one seen (`data.stale[]` with `reason`) |
 | `/api/v1/changelog.json` | Recent changelog entries fleet-wide (`data.changelog[]`: `image`, `date`, `desc`) |
-| `/api/v1/mods.json` | Every mod (`data.mods[]`): `name`, `branch`, `target`, `applies_to`, `maintainers`, `deprecated` |
+| `/api/v1/mods.json` | Every mod (`data.mods[]`): `name`, `branch`, `target`, `applies_to`, `maintainers`, `deprecated`, and `builds[]` per version line (default line first, `line` absent for it): `version`, `built_at`, `pin` (the exact tag), the floating `tags`, `digest`, `revision`. Read hourly from the GHCR `mods` package by the hub's `refresh.yml`, so a new mod build shows there (and on its site page) after the next refresh |
 | `/api/v1/{categories,stats}.json`, `/api/v1/stores/index.json` | Categories, fleet statistics, store index |
 | `/builds/<image>/<tag>/` | Screenshots (`<arch>/screenshot.png`), `container.log`, `files.<arch>.json.gz` (newest build per branch) |
 

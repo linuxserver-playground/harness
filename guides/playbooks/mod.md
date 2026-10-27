@@ -27,6 +27,12 @@ The rules:
   types as `image.yml`, plus `combined`; not `os`, `command` or `deb_repo`) and `ARG MOD_VERSION` in its
   Dockerfile. Every build passes the resolved version and tags `<branch>-<version>`; control checks it hourly
   and builds the mod when a new version is out. A push is not needed for a new upstream release.
+- When upstream ships several version lines at once (Go's two supported releases and its release candidate),
+  `upstream.lines` names the others, each with its own `version` source, and `tags` (`major`, `minor`) lists
+  the floating `-X` and `-X.Y` tags a line moves. Control builds each line in turn; only the default line moves
+  `mods:<branch>`. `builder render-mod` adds the `line` input to that branch's `build.yml`. `code-server-golang`
+  is the worked example.
+- Control re-reads `mod.yml` as soon as a push touches it; the hub picks it up at its next hourly refresh.
 - Read `repos/docker-mods/README.md` (how to write one) and its `AGENTS.md` (rules).
 
 Existing mods: `curl -fsS https://linuxserver-playground.github.io/hub/api/v1/mods.json | jq -r '.data.mods[] | "\(.branch): \(.summary)"'`.

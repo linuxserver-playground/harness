@@ -26,7 +26,7 @@ either, they win. Then fix this guide.
 | `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | A push to main, `hub-updated` (relayed by control after every hub deploy), or the daily cron |
 | `control` | A FastAPI GitHub App on a small server (n97). It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the server pulls it within 5 minutes |
 | `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
-| `docker-mods` | `master` holds the tooling. There is one branch per mod (`<target>-<name>`) with `mod.yml` | A push to a mod branch builds the mod image. The hub's next scheduled run reads the `mod.yml` |
+| `docker-mods` | `master` holds the tooling. There is one branch per mod (`<target>-<name>`) with `mod.yml` | A push to a mod branch builds the mod image, and control re-reads a changed `mod.yml` at once. The hub's next scheduled run reads the `mod.yml` |
 | `unraid-store`, `umbrel-store`, `runtipi-store` | Generated store repos, pushed hourly by the hub's `refresh.yml` | Never edit them; change the generator in the hub |
 | `.github` (`repos/dot-github`) | The org profile, CONTRIBUTING, SECURITY, issue forms and PR template | Push to main |
 | `workspace` | The maintainers' workbench: `DECISIONS.md`, working notes (`docs/`), the cutover list | Push to main |
@@ -71,8 +71,10 @@ Control replaces every per-repo cron:
 - weekly package checks (`Update package versions` commits, which deliberately do start a build).
 - hourly mod checks, for the docker-mods branches whose `mod.yml` has an `upstream` block (the Jenkins
   External-Triggers jobs): the same resolver, then GHCR is asked whether `mods:<branch>-<version>` exists; when
-  it does not, the branch's `build.yml` is dispatched with `mod_version`. Decisions show as image `mods`, kind
-  `mod`. `control/mods.py`; discovery reads every branch's `mod.yml` every 30 minutes.
+  it does not, the branch's `build.yml` is dispatched with `mod_version` (and `line` for a mod with
+  `upstream.lines`: each version line is checked, and the first missing one built, one build at a time).
+  Decisions show as image `mods`, kind `mod`. `control/mods.py`; discovery reads every branch's `mod.yml` every
+  30 minutes, and a push that touches a branch's `mod.yml` re-reads it at once.
 - the batch build projects (proot-apps daily 00:00 UTC, selkies-layers daily 04:30, wheelie's gap check
   hourly): each run is dispatched with a `parallel` sized to the slots free after a reserve of 4 for image, hub
   and site builds (2 to 16), and Discord hears when a unit (a layer, an app, a wheel) starts failing or
