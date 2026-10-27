@@ -72,7 +72,8 @@ Control replaces every per-repo cron:
 - hourly mod checks, for the docker-mods branches whose `mod.yml` has an `upstream` block (the Jenkins
   External-Triggers jobs): the same resolver, then GHCR is asked whether `mods:<branch>-<version>` exists; when
   it does not, the branch's `build.yml` is dispatched with `mod_version` (and `line` for a mod with
-  `upstream.lines`: each version line is checked, and the first missing one built, one build at a time).
+  `upstream.lines`: each version line is checked, and the first missing one built, one build at a time; when a
+  build of such a mod completes, control checks it again at once for the next line).
   Decisions show as image `mods`, kind `mod`. `control/mods.py`; discovery reads every branch's `mod.yml` every
   30 minutes, and a push that touches a branch's `mod.yml` re-reads it at once.
 - the batch build projects (proot-apps daily 00:00 UTC, selkies-layers daily 04:30, wheelie's gap check
