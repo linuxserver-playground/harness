@@ -1,0 +1,808 @@
+#!/usr/bin/env bash
+# The harness CLI: the parts of working on linuxserver-playground that must give the same answer every time,
+# whichever agent (or person) runs them. The guides in guides/ say when to use each command.
+#
+#   ./harness whoami [--refresh] [--brief]   who you are to the org: member or contributor (writes .harness/profile.json)
+#   ./harness doctor                         which local tools you have, and what a missing one rules out
+#   ./harness core                           clone the infrastructure repos (and the workspace) into repos/
+#   ./harness get <repo>...                  clone more repos on demand (docker-<name>, or just <name>)
+#   ./harness all                            clone every repo in the org (about 230; heavy)
+#   ./harness sync                           fast-forward every clone; report repos gone from the org
+#   ./harness fork <repo>                    contributors: fork a cloned repo and make the fork origin
+#   ./harness setup <repo>                   install one repo's dev environment (venv, npm, cargo)
+#   ./harness snapshot                       one consistent picture of the org from control, the hub and GitHub
+#   ./harness lookup <image>                 one image at a glance: branches, builds, tests, PRs, issues, dependents
+#   ./harness try <image> [tag] | --build <repo> | --stop [image]
+#                                            run a published or locally built image in Docker and wait for init
+#   ./harness render <repo> [--in-place]     builder check, then render the generated files (out of tree by default)
+#   ./harness validate <repo> [--no-build]   the repo's own validation list; results go to .harness/validation/
+#   ./harness draft pr|issue|review <repo> [number]
+#                                            fill a template into .harness/drafts/ for you to read before anything is filed
+#   ./harness allow push|force-push|tag|delete <repo> [minutes]
+#                                            members: let the guard hook pass one protected action for a while (default 30 min)
+#
+# Nothing here opens an issue or a pull request, posts a comment or pushes. Those stay with the person.
+set -euo pipefail
+
+VERSION=0.1.0
+ORG=${HARNESS_ORG:-linuxserver-playground}
+LABS_ORG=${HARNESS_LABS_ORG:-linuxserver-playground-labs}
+CONTROL=${HARNESS_CONTROL_URL:-https://ci.thelamer.duckdns.org:8443}
+HUB=${HARNESS_HUB_URL:-https://linuxserver-playground.github.io/hub}
+SITE=${HARNESS_SITE_URL:-https://linuxserver-playground.github.io/site}
+REGISTRY=ghcr.io/$ORG
+BUILDER_IMAGE=${HARNESS_BUILDER_IMAGE:-$REGISTRY/builder:latest}
+SHELLCHECK_IMAGE=koalaman/shellcheck:stable
+CORE=(workspace builder workflows ci hub site control dumper .github docker-mods)
+GENERATED=(README.md AGENTS.md LICENSE .github/workflows/build.yml .github/workflows/pr-report.yml)
+PYTHON_REPOS=(builder workflows ci hub control)
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repos_dir=${REPOS_DIR:-$here/repos}
+state=$here/.harness
+profile=$state/profile.json
+
+say() { printf '%s\n' "$*"; }
+warn() { printf 'warning: %s\n' "$*" >&2; }
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+need() { for tool in "$@"; do have "$tool" || die "$tool is required (run ./harness doctor)"; done; }
+fetch() { curl -fsS --max-time 30 "$1"; }
+
+# The directory a repo is cloned into: .github would be hidden, so it is dot-github, as in the workspace.
+repo_dir() {
+  local name=$1
+  [[ "$name" == ".github" || "$name" == "dot-github" ]] && { echo "$repos_dir/dot-github"; return; }
+  echo "$repos_dir/$name"
+}
+
+# Accept docker-sonarr, sonarr or a path under repos/; answer the org repo name.
+resolve_repo() {
+  local name=${1%/}
+  name=${name##*/}
+  [[ "$name" == "dot-github" ]] && { echo ".github"; return; }
+  if [[ -e "$(repo_dir "$name")/.git" ]] || gh repo view "$ORG/$name" --json name >/dev/null 2>&1; then
+    echo "$name"
+  elif gh repo view "$ORG/docker-$name" --json name >/dev/null 2>&1; then
+    echo "docker-$name"
+  else
+    die "no repo $ORG/$name or $ORG/docker-$name"
+  fi
+}
+
+# The image name for a repo or image argument: docker-sonarr -> sonarr.
+image_name() { local name=${1%/}; name=${name##*/}; echo "${name#docker-}"; }
+
+role() { [[ -f "$profile" ]] && jq -r '.role' "$profile" || echo "unknown"; }
+
+# ---------------------------------------------------------------------------------------------------- whoami
+
+cmd_whoami() {
+  local refresh=false brief=false
+  for arg in "$@"; do
+    case "$arg" in
+      --refresh) refresh=true ;;
+      --brief) brief=true ;;
+      *) die "unknown option $arg" ;;
+    esac
+  done
+  mkdir -p "$state"
+  if ! $refresh && [[ -f "$profile" ]]; then
+    local checked age
+    checked=$(jq -r '.checked_epoch // 0' "$profile")
+    age=$(( $(date +%s) - checked ))
+    if (( age < 86400 )) && [[ "$(jq -r '.version' "$profile")" == "$VERSION" ]]; then
+      briefing "$brief"
+      return
+    fi
+  fi
+
+  local login="" role="contributor" state_="none" org_role="" note="" scopes=""
+  if ! have gh; then
+    note="gh is not installed: install the GitHub CLI and run 'gh auth login'. Until then you can only read the public data sources."
+    role="anonymous"
+  elif ! gh auth status >/dev/null 2>&1; then
+    note="gh is not signed in: run 'gh auth login'. Until then you can only read the public data sources."
+    role="anonymous"
+  else
+    login=$(gh api user --jq .login)
+    scopes=$(gh auth status 2>&1 | sed -n "s/.*Token scopes: //p" | tr -d "'" | head -n1)
+    local out rc=0
+    out=$(gh api "user/memberships/orgs/$ORG" --jq '.state + " " + .role' 2>&1) || rc=$?
+    if (( rc == 0 )); then
+      state_=${out%% *}
+      org_role=${out##* }
+      if [[ "$state_" == "active" ]]; then
+        role="member"
+      else
+        note="your invitation to $ORG is $state_: accept it at https://github.com/orgs/$ORG/invitation, then run ./harness whoami --refresh. Until then you are on the contributor path."
+      fi
+    elif [[ "$out" == *"HTTP 403"* ]]; then
+      note="your gh token cannot read org memberships: run 'gh auth refresh -s read:org', then ./harness whoami --refresh. Treated as a contributor until then."
+    elif [[ "$out" != *"HTTP 404"* ]]; then
+      note="could not read your membership ($out). Treated as a contributor; try ./harness whoami --refresh."
+    fi
+    if [[ "$role" == "member" && "$scopes" != *workflow* ]]; then
+      note="your gh token has no 'workflow' scope, so pushes that touch .github/workflows will be refused: run 'gh auth refresh -s workflow'."
+    fi
+  fi
+
+  jq -n --arg login "$login" --arg role "$role" --arg membership "$state_" --arg org_role "$org_role" \
+    --arg scopes "$scopes" --arg note "$note" --arg version "$VERSION" --arg org "$ORG" \
+    --arg checked "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson epoch "$(date +%s)" \
+    '{login: $login, role: $role, org: $org, membership: $membership, org_role: $org_role, scopes: $scopes,
+      note: $note, version: $version, checked_at: $checked, checked_epoch: $epoch}' >"$profile"
+  briefing "$brief"
+}
+
+briefing() {
+  local brief=$1 login role note
+  login=$(jq -r '.login' "$profile")
+  role=$(jq -r '.role' "$profile")
+  note=$(jq -r '.note' "$profile")
+  say "harness $VERSION: ${login:-not signed in} is a ${role} of $ORG (checked $(jq -r '.checked_at' "$profile"))."
+  [[ -n "$note" ]] && say "NOTE: $note"
+  case "$role" in
+    member)
+      say "Path: member. Read guides/roles/member.md. You may create repos; changes to existing repos go up as a pull request for review."
+      ;;
+    *)
+      say "Path: contributor. Read guides/roles/contributor.md. You work in forks (./harness fork <repo>) and open pull requests; new images are proposed to $LABS_ORG."
+      ;;
+  esac
+  if [[ "$brief" == true ]]; then
+    say "Pick the playbook for the request from the table in AGENTS.md before acting. Drafts go to .harness/drafts/; the person files them."
+    return
+  fi
+  local cloned
+  cloned=$( (find "$repos_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true) | wc -l)
+  say "Repos cloned in repos/: $cloned (./harness core for the infrastructure set, ./harness get <repo> for more)."
+}
+
+# ---------------------------------------------------------------------------------------------------- doctor
+
+cmd_doctor() {
+  local missing=0
+  row() { printf '%-10s %-8s %s\n' "$1" "$2" "$3"; }
+  check() {
+    local tool=$1 why=$2 version=""
+    if have "$tool"; then
+      version=$("$tool" --version 2>/dev/null | head -n1 || true)
+      row "$tool" ok "${version:0:60}"
+    else
+      row "$tool" MISSING "$why"
+      missing=$((missing + 1))
+    fi
+  }
+  check git "nothing works without it"
+  check gh "no role detection, cloning, forks, issues or PRs"
+  check jq "the harness CLI and its hooks need it"
+  check curl "no live data from control or the hub"
+  check docker "no local builds, runs, builder check or render: most playbooks that change an image"
+  if have docker; then
+    if docker info >/dev/null 2>&1; then
+      row docker-up ok "daemon reachable"
+      if docker buildx version >/dev/null 2>&1; then row buildx ok "$(docker buildx version | head -n1 | cut -c1-60)"; else row buildx MISSING "no multi-arch builds"; fi
+      local other=aarch64
+      [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]] && other=x86_64
+      if [[ -e /proc/sys/fs/binfmt_misc/qemu-$other ]]; then
+        row qemu ok "can build and run the $other image locally (slow)"
+      else
+        row qemu absent "only the $(uname -m) image builds locally; the PR build covers the other arch (docker run --privileged --rm tonistiigi/binfmt --install all to add it)"
+      fi
+    else
+      row docker-up DOWN "the daemon is not reachable by your user"
+      missing=$((missing + 1))
+    fi
+  fi
+  check python3 "no builder, hub, control, ci or workflows checks"
+  if have python3; then
+    python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' ||
+      row python3 OLD "3.12+ needed (3.13 preferred: the hub and control use it)"
+  fi
+  check node "no site checks"
+  if have node; then
+    node -e 'process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)' || row node OLD "Node 22+ needed (CI uses 24)"
+  fi
+  if have shellcheck; then row shellcheck ok "$(shellcheck --version | sed -n 2p)"; else row shellcheck docker "not installed; validate runs it from the $SHELLCHECK_IMAGE image"; fi
+  check cargo "no dumper checks (rarely needed)"
+  say ""
+  if have gh && gh auth status >/dev/null 2>&1; then
+    say "gh: signed in as $(gh api user --jq .login); scopes: $(gh auth status 2>&1 | sed -n "s/.*Token scopes: //p" | head -n1)"
+  else
+    say "gh: not signed in (gh auth login)"
+  fi
+  if (( missing == 0 )); then say "Everything the harness uses is here."; else say "$missing missing: see the right-hand column for what that rules out."; fi
+}
+
+# ---------------------------------------------------------------------------------------------------- clones
+
+clone_or_update() {
+  local name=$1 dir
+  dir=$(repo_dir "$name")
+  if [[ ! -e "$dir/.git" ]]; then
+    local args=(--quiet --filter=blob:none)
+    # docker-mods holds one branch per mod: clone master only and fetch a mod's branch when it is needed.
+    [[ "$name" == "docker-mods" ]] && args+=(--single-branch)
+    gh repo clone "$ORG/$name" "$dir" -- "${args[@]}"
+    say "cloned   $name"
+    return
+  fi
+  local remote=origin default current
+  git -C "$dir" remote get-url upstream >/dev/null 2>&1 && remote=upstream
+  git -C "$dir" fetch --quiet "$remote" || { say "offline  $name (fetch failed)"; return; }
+  default=$(git -C "$dir" symbolic-ref --short "refs/remotes/$remote/HEAD" 2>/dev/null | sed "s#^$remote/##")
+  [[ -z "$default" ]] && default=$(gh repo view "$ORG/$name" --json defaultBranchRef --jq .defaultBranchRef.name)
+  current=$(git -C "$dir" branch --show-current)
+  if [[ -n "$(git -C "$dir" status --porcelain)" || "$current" != "$default" ]]; then
+    say "fetched  $name (on ${current:-a detached HEAD} or with local changes; not merged)"
+  elif git -C "$dir" merge --quiet --ff-only "$remote/$default" >/dev/null 2>&1; then
+    say "updated  $name"
+  else
+    say "diverged $name (left as is)"
+  fi
+}
+
+cmd_core() {
+  need gh git
+  mkdir -p "$repos_dir"
+  for name in "${CORE[@]}"; do clone_or_update "$name"; done
+  say "Core repos are in repos/. Image repos come on demand: ./harness get <name>."
+}
+
+cmd_get() {
+  need gh git
+  (( $# )) || die "usage: ./harness get <repo>..."
+  mkdir -p "$repos_dir"
+  local name
+  for arg in "$@"; do
+    name=$(resolve_repo "$arg")
+    clone_or_update "$name"
+  done
+}
+
+cmd_all() {
+  need gh git
+  mkdir -p "$repos_dir"
+  say "Cloning every repo in $ORG (about 230, a few GB with dev environments). Ctrl-C to stop; re-run to resume."
+  gh repo list "$ORG" --limit 1000 --no-archived --json name --jq '.[].name' | sort | while read -r name; do
+    clone_or_update "$name"
+  done
+}
+
+cmd_sync() {
+  need gh git
+  [[ -d "$repos_dir" ]] || die "nothing cloned yet: ./harness core"
+  local live
+  live=$(gh repo list "$ORG" --limit 1000 --json name,isArchived --jq '.[] | "\(.name) \(.isArchived)"')
+  for dir in "$repos_dir"/*/; do
+    local name
+    name=$(basename "$dir")
+    [[ "$name" == "dot-github" ]] && name=.github
+    if [[ ! -e "$dir/.git" ]]; then
+      say "stale    $(basename "$dir") (not a git clone; safe to delete if you made it by hand)"
+    elif ! grep -q "^$name " <<<"$live"; then
+      say "gone     $name (no longer in $ORG; delete repos/$(basename "$dir") when you are done with it)"
+    elif grep -q "^$name true$" <<<"$live"; then
+      say "archived $name"
+    else
+      clone_or_update "$name"
+    fi
+  done
+}
+
+cmd_fork() {
+  need gh git
+  (( $# == 1 )) || die "usage: ./harness fork <repo>"
+  local name dir
+  name=$(resolve_repo "$1")
+  dir=$(repo_dir "$name")
+  [[ -e "$dir/.git" ]] || clone_or_update "$name"
+  if git -C "$dir" remote get-url upstream >/dev/null 2>&1; then
+    say "$name is already forked: origin $(git -C "$dir" remote get-url origin), upstream $(git -C "$dir" remote get-url upstream)"
+    return
+  fi
+  (cd "$dir" && gh repo fork --remote --remote-name origin >/dev/null)
+  say "forked $name: origin is now your fork ($(git -C "$dir" remote get-url origin)), upstream is $ORG/$name."
+  say "Push branches to origin; open the pull request against upstream."
+}
+
+cmd_setup() {
+  (( $# == 1 )) || die "usage: ./harness setup <repo>"
+  local name dir python=python3
+  name=$(resolve_repo "$1")
+  dir=$(repo_dir "$name")
+  [[ -d "$dir" ]] || clone_or_update "$name"
+  have python3.13 && python=python3.13
+  if [[ " ${PYTHON_REPOS[*]} " == *" $name "* ]]; then
+    [[ -d "$dir/.venv" ]] || "$python" -m venv "$dir/.venv"
+    # The other Python repos install builder from builder@main; a local builder clone wins when there is one.
+    "$dir/.venv/bin/pip" install --quiet --upgrade pip
+    if [[ "$name" != builder && -d "$repos_dir/builder" ]]; then
+      "$dir/.venv/bin/pip" install --quiet -e "$repos_dir/builder"
+    fi
+    "$dir/.venv/bin/pip" install --quiet -e "${dir}[dev]"
+    say "$name: .venv ready ($("$dir/.venv/bin/python" --version))"
+  elif [[ "$name" == site ]]; then
+    need node npm
+    (cd "$dir" && npm ci --silent && npx --yes playwright install chromium >/dev/null)
+    say "site: node_modules and Chromium ready"
+  elif [[ "$name" == dumper ]]; then
+    need cargo
+    (cd "$dir" && cargo build --quiet)
+    say "dumper: built"
+  else
+    say "$name needs no dev environment: image repos and mods are checked with Docker (./harness validate $name)."
+  fi
+}
+
+# ---------------------------------------------------------------------------------------------------- data
+
+cmd_snapshot() {
+  need curl jq
+  local stamp dir
+  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+  dir=$state/snapshot/$stamp
+  mkdir -p "$dir"
+  for endpoint in status fleet runs queue pulls issues skips; do
+    fetch "$CONTROL/api/$endpoint.json" >"$dir/control-$endpoint.json" || warn "control /api/$endpoint.json failed"
+  done
+  fetch "$HUB/api/v1/status.json" >"$dir/hub-status.json" || warn "hub status failed"
+  fetch "$HUB/api/v1/fleet/staleness.json" >"$dir/hub-staleness.json" || warn "hub staleness failed"
+  if have gh && gh auth status >/dev/null 2>&1; then
+    gh search prs --owner "$ORG" --state open --limit 200 \
+      --json number,title,repository,author,createdAt,updatedAt,labels,isDraft,url,commentsCount >"$dir/gh-prs.json" ||
+      warn "gh search prs failed"
+    gh search issues --owner "$ORG" --state open --limit 200 \
+      --json number,title,repository,author,createdAt,updatedAt,labels,url,commentsCount >"$dir/gh-issues.json" ||
+      warn "gh search issues failed"
+  fi
+  ln -sfn "$stamp" "$state/snapshot/latest"
+  say "snapshot $stamp in .harness/snapshot/latest/"
+  [[ -s "$dir/control-fleet.json" ]] && jq -r '
+    "fleet:   \(.rows | length) live branches, \([.rows[] | select(.result == "failure")] | length) red, \([.rows[] | select(.drift == "ahead")] | length) behind upstream, \([.rows[] | select((.skip | length) > 0)] | length) with skip flags"' \
+    "$dir/control-fleet.json"
+  [[ -s "$dir/control-fleet.json" ]] && jq -r '.helpers[] | select((.failing | length) > 0) | "helpers: \(.name) has \(.failing | length) failing branches (\(.failing | join(", ")))"' "$dir/control-fleet.json"
+  [[ -s "$dir/control-queue.json" ]] && jq -r '"runners: \(.in_use)/\(.limit) jobs in use, \(.queued | length) queued"' "$dir/control-queue.json"
+  [[ -s "$dir/control-pulls.json" ]] && jq -r '"pulls:   \(.pulls | length) open (\([.pulls[] | select(.pull.title | startswith("[test data]"))] | length) of them [test data] fixtures)"' "$dir/control-pulls.json"
+  [[ -s "$dir/control-issues.json" ]] && jq -r '"issues:  \(.issues | length) open (\([.issues[] | select(.title | startswith("[test data]"))] | length) of them [test data] fixtures)"' "$dir/control-issues.json"
+  [[ -s "$dir/hub-status.json" ]] && jq -r '.data.status // .data | "hub:     \(.health // "?"), \(.images // "?") images; stale sources: \([.sources // {} | to_entries[] | select(.value.ok | not) | .key] | join(", ") | if . == "" then "none" else . end)"' "$dir/hub-status.json"
+  return 0
+}
+
+cmd_lookup() {
+  need curl jq
+  (( $# == 1 )) || die "usage: ./harness lookup <image>"
+  local name tmp
+  name=$(image_name "$1")
+  tmp=$state/lookup/$name
+  mkdir -p "$tmp"
+  fetch "$HUB/api/v1/catalog/$name.json" >"$tmp/catalog.json" || die "the hub has no image '$name' (check $HUB/api/v1/images.json)"
+  fetch "$HUB/api/v1/catalog/$name/builds.json" >"$tmp/builds.json" || echo '{"data":{"builds":[]}}' >"$tmp/builds.json"
+  fetch "$CONTROL/api/images/$name.json" >"$tmp/control.json" || echo '{}' >"$tmp/control.json"
+  fetch "$HUB/api/v1/fleet/bases.json" >"$tmp/bases.json" || echo '{"data":{"bases":[]}}' >"$tmp/bases.json"
+  jq -r --arg site "$SITE" '.data.image |
+    "\(.name) (\(.kind // "app"))\(if .deprecated then " DEPRECATED" else "" end)\(if .archived then " ARCHIVED" else "" end): \(.description // "" | .[0:160])",
+    "  page:     \($site)/images/\(.name)/",
+    "  repo:     \(.github_url)",
+    "  upstream: \(.project_url // "?") at \(.upstream_version // "?"); base \(.base // "?"); arches \(.architectures // [] | map(.arch? // .) | join(", "))",
+    "  tags:     \(.tags // [] | map(.tag) | join(", "))"' "$tmp/catalog.json"
+  say "  live branches (control):"
+  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built") \(.version_tag // "")\(if .drift == "ahead" then " (upstream moved to \(.upstream))" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), built \(.built_at // "?")"' "$tmp/control.json"
+  say "  recent releases (hub):"
+  jq -r --arg site "$SITE" --arg name "$name" '.data.builds[:5][] | "    \(.tag) \(.branch) \(.created) tests \(if .test_success then "passed" else "FAILED" end) \(.platforms | map("\(.arch)=\(.result)") | join(" "))  \($site)/images/\($name)/builds/\(.tag)/"' "$tmp/builds.json"
+  fetch "$CONTROL/api/pulls.json" >"$tmp/pulls.json" || echo '{"pulls":[]}' >"$tmp/pulls.json"
+  fetch "$CONTROL/api/issues.json" >"$tmp/issues.json" || echo '{"issues":[]}' >"$tmp/issues.json"
+  jq -r --arg repo "$ORG/docker-$name" '[.pulls[] | select(.pull.repo == $repo)] |
+    "  open PRs: \(length)", (.[] | "    #\(.pull.number) \(.pull.title) (build \(.run.conclusion // .run.status // "none"), review \(.pull.review_state // "none"))")' "$tmp/pulls.json"
+  jq -r --arg repo "$ORG/docker-$name" '[.issues[] | select(.repo == $repo)] |
+    "  open issues: \(length)", (.[] | "    #\(.number) \(.title) [\(.labels | join(", "))]")' "$tmp/issues.json"
+  local dependents
+  dependents=$(jq -r --arg name "$name" '[.data.bases[] | select(.image | test("/" + $name + ":")) | .images[]] | unique | join(", ")' "$tmp/bases.json")
+  [[ -n "$dependents" ]] && say "  built FROM it: $dependents"
+  return 0
+}
+
+# ---------------------------------------------------------------------------------------------------- docker
+
+cmd_try() {
+  need docker jq curl
+  (( $# )) || die "usage: ./harness try <image> [tag] | --build <repo> | --stop [image]"
+  if [[ "$1" == "--stop" ]]; then
+    local filter=harness-try-
+    [[ -n "${2:-}" ]] && filter=harness-try-$(image_name "$2")
+    docker ps -aq --filter "name=$filter" | xargs -r docker rm -f >/dev/null
+    say "stopped ${2:-every harness-try container}"
+    return
+  fi
+  local name ref
+  if [[ "$1" == "--build" ]]; then
+    local repo dir dockerfile=Dockerfile
+    repo=$(resolve_repo "${2:?usage: ./harness try --build <repo>}")
+    dir=$(repo_dir "$repo")
+    name=$(image_name "$repo")
+    [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]] && dockerfile=Dockerfile.aarch64
+    ref=harness-local/$name:$(git -C "$dir" rev-parse --short HEAD)
+    say "building $ref from $repo ($dockerfile, --pull --no-cache, as CI does)"
+    docker build --pull --no-cache -f "$dir/$dockerfile" -t "$ref" "$dir"
+  else
+    name=$(image_name "$1")
+    local tag=${2:-latest}
+    if [[ "$tag" == */* || "$tag" == *:* ]]; then ref=$tag; else ref=$REGISTRY/$name:$tag; fi
+    docker pull --quiet "$ref" >/dev/null || die "cannot pull $ref"
+  fi
+  local catalog args=(-d --name "harness-try-$name" -e PUID="$(id -u)" -e PGID="$(id -g)" -e TZ=Etc/UTC)
+  catalog=$(fetch "$HUB/api/v1/catalog/$name.json" 2>/dev/null || echo '{}')
+  local data=$state/try/$name
+  mkdir -p "$data"
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      port)
+        local host=$a
+        # Avoid privileged and busy host ports: shift into 18000+ when needed.
+        if (( host < 1024 )) || (ss -ltn 2>/dev/null | grep -q ":$host "); then host=$((18000 + a % 1000)); fi
+        args+=(-p "$host:$b")
+        say "  port  http://localhost:$host -> $b"
+        ;;
+      volume)
+        mkdir -p "$data/${a//\//_}"
+        args+=(-v "$data/${a//\//_}:$a")
+        ;;
+      env) args+=(-e "$a=$b") ;;
+    esac
+  done < <(jq -r '.data.image.config // {} |
+    (.ports // [] | map(select(.optional | not))[] | "port\t\(.internal | split("/")[0])\t\(.internal)"),
+    (.volumes // [] | map(select(.optional | not))[] | "volume\t\(.path)\t"),
+    (.env_vars // [] | map(select((.optional | not) and (.name | IN("PUID","PGID","TZ") | not)))[] | "env\t\(.name)\t\(.value)")' <<<"$catalog")
+  docker rm -f "harness-try-$name" >/dev/null 2>&1 || true
+  docker run "${args[@]}" "$ref" >/dev/null
+  say "started harness-try-$name from $ref (data in .harness/try/$name/); waiting for init"
+  local waited=0
+  until docker logs "harness-try-$name" 2>&1 | grep -q '\[ls.io-init\] done\.'; do
+    if [[ "$(docker inspect -f '{{.State.Running}}' "harness-try-$name")" != true ]]; then
+      docker logs --tail 40 "harness-try-$name" 2>&1
+      die "the container exited before init finished"
+    fi
+    (( waited >= 300 )) && { docker logs --tail 40 "harness-try-$name" 2>&1; die "no '[ls.io-init] done.' after 300s"; }
+    sleep 5
+    waited=$((waited + 5))
+  done
+  say "init done after ~${waited}s. Last log lines:"
+  docker logs --tail 15 "harness-try-$name" 2>&1
+  say "Stop it with ./harness try --stop $name"
+}
+
+builder() {
+  local dir=$1
+  shift
+  docker run --rm -v "$dir":/repo --user "$(id -u):$(id -g)" "$BUILDER_IMAGE" "$@"
+}
+
+cmd_render() {
+  need docker git
+  (( $# >= 1 )) || die "usage: ./harness render <repo> [--in-place]"
+  local repo dir in_place=false
+  repo=$(resolve_repo "$1")
+  [[ "${2:-}" == "--in-place" ]] && in_place=true
+  dir=$(repo_dir "$repo")
+  [[ -f "$dir/image.yml" || -f "$dir/mod.yml" ]] || die "$repo has no image.yml or mod.yml on the checked-out branch"
+  docker pull --quiet "$BUILDER_IMAGE" >/dev/null
+  if [[ -f "$dir/mod.yml" ]]; then
+    if builder "$dir" render-mod --check; then say "mod files are up to date"; else say "generated files differ: ./harness render <checkout> --in-place rewrites them (on mod branches they are committed with the change)"; fi
+    $in_place && builder "$dir" render-mod
+    return 0
+  fi
+  local rc=0
+  builder "$dir" check --drift warn || rc=$?
+  if $in_place; then
+    builder "$dir" render
+    say "Rendered in place. Commit these only on a new repo's first pull request or a live branch; on any other PR branch the build fails when generated files change."
+  else
+    local out=$state/render/$repo
+    rm -rf "$out"
+    mkdir -p "$out"
+    git -C "$dir" ls-files -z | (cd "$dir" && xargs -0 cp --parents -t "$out" 2>/dev/null) || true
+    builder "$out" render --all
+    say "Rendered out of tree in .harness/render/$repo/ (README.md, AGENTS.md, LICENSE, .github/workflows/build.yml; docs page in .builder-out/)."
+    for file in "${GENERATED[@]}"; do
+      [[ -f "$out/$file" ]] || continue
+      if ! diff -q "$dir/$file" "$out/$file" >/dev/null 2>&1; then say "  differs from the checkout: $file"; fi
+    done
+  fi
+  return "$rc"
+}
+
+# ---------------------------------------------------------------------------------------------------- validate
+
+cmd_validate() {
+  (( $# >= 1 )) || die "usage: ./harness validate <repo> [--no-build]"
+  local repo dir build=true
+  repo=$(resolve_repo "$1")
+  [[ "${2:-}" == "--no-build" ]] && build=false
+  dir=$(repo_dir "$repo")
+  [[ -e "$dir/.git" ]] || die "$repo is not cloned: ./harness get $repo"
+  mkdir -p "$state/validation"
+  local report=$state/validation/$repo.md failed=0
+  {
+    say "# Validation of $repo"
+    say ""
+    say "Branch \`$(git -C "$dir" branch --show-current)\` at \`$(git -C "$dir" rev-parse --short HEAD)\`, $(date -u +%Y-%m-%dT%H:%M:%SZ), harness $VERSION."
+    say ""
+  } >"$report"
+  step() {
+    local label=$1
+    shift
+    say "== $label"
+    if (cd "$dir" && "$@") >"$state/validation/step.log" 2>&1; then
+      say "- $label: ok" >>"$report"
+      tail -n 3 "$state/validation/step.log"
+    else
+      say "- $label: FAILED" >>"$report"
+      tail -n 30 "$state/validation/step.log"
+      failed=$((failed + 1))
+    fi
+  }
+  skip() { say "- $1: not run ($2)" >>"$report"; say "== $1: not run ($2)"; }
+
+  if [[ -f "$dir/image.yml" ]]; then
+    validate_image "$dir"
+  elif [[ -f "$dir/mod.yml" ]]; then
+    validate_mod "$dir"
+  else
+    case "$repo" in
+      builder | hub | control | ci)
+        [[ -x "$dir/.venv/bin/python" ]] || die "no .venv in $repo: ./harness setup $repo"
+        local mypy_args=()
+        [[ "$repo" == control ]] && mypy_args=(control tests)
+        [[ "$repo" == ci ]] && mypy_args=(ci tests)
+        step "ruff check" "$dir/.venv/bin/ruff" check .
+        step "ruff format --check" "$dir/.venv/bin/ruff" format --check .
+        step "mypy" "$dir/.venv/bin/mypy" "${mypy_args[@]}"
+        step "pytest" "$dir/.venv/bin/pytest" -q
+        if [[ "$repo" == builder ]]; then
+          step "contracts examples" bash -c '.venv/bin/python -m contracts image examples/*/image.yml'
+        elif [[ "$repo" == hub ]]; then
+          step "build the API" "$dir/.venv/bin/python" -m lsio_hub.build
+          step "generate --offline" "$dir/.venv/bin/python" -m lsio_hub.generate --offline
+        fi
+        ;;
+      workflows) step "scripts/check.sh" ./scripts/check.sh ;;
+      site)
+        [[ -d "$dir/node_modules" ]] || die "no node_modules in site: ./harness setup site"
+        step "npm run check" npm run check
+        step "npm run build" npm run build
+        if have npx; then
+          (cd "$dir" && npx astro preview --port 4321 >/dev/null 2>&1 &)
+          sleep 4
+          step "a11y" node scripts/a11y.mjs http://localhost:4321/site
+          step "search" node scripts/test-search.mjs http://localhost:4321/site
+          step "overflow at 390px (home)" node scripts/overflow.mjs http://localhost:4321/site/
+          pkill -f "astro preview --port 4321" || true
+        fi
+        say "- also run, when the change touches them: overflow.mjs on every changed page, editor-check.mjs (editor), fleet-check.mjs (fleet pages)" >>"$report"
+        ;;
+      dumper)
+        step "cargo test" cargo test --quiet
+        step "cargo clippy" cargo clippy --quiet -- -D warnings
+        ;;
+      *)
+        if [[ -f "$dir/AGENTS.md" ]]; then
+          say "- $repo has no harness recipe: follow the validation list in its AGENTS.md" >>"$report"
+        fi
+        ;;
+    esac
+  fi
+  say ""
+  say "Report: .harness/validation/$repo.md"
+  cat "$report"
+  (( failed == 0 ))
+}
+
+validate_image() {
+  local dir=$1 base remote=origin branch live
+  # In a fork the org's branches are on upstream; the pull request will target the branch image.yml names.
+  git -C "$dir" remote get-url upstream >/dev/null 2>&1 && remote=upstream
+  branch=$(git -C "$dir" branch --show-current)
+  live=$(awk '/^release:/ { r = 1; next } /^[^ ]/ { r = 0 } r && /^  branch:/ { gsub(/["'\'']/, "", $2); print $2; exit }' "$dir/image.yml")
+  base=${HARNESS_BASE:-}
+  if [[ -z "$base" && -n "$live" && "$branch" != "$live" ]]; then
+    base=$(git -C "$dir" merge-base HEAD "$remote/$live" 2>/dev/null || true)
+  fi
+
+  if have docker && docker info >/dev/null 2>&1; then
+    docker pull --quiet "$BUILDER_IMAGE" >/dev/null
+    step "builder check --drift warn" docker run --rm -v "$dir":/repo --user "$(id -u):$(id -g)" "$BUILDER_IMAGE" check --drift warn
+  else
+    skip "builder check" "Docker is not available"
+  fi
+  if [[ -n "$base" ]]; then
+    local edited
+    edited=$(git -C "$dir" diff --name-only "$base" HEAD -- "${GENERATED[@]}")
+    if [[ -n "$edited" ]] && git -C "$dir" cat-file -e "$base:image.yml" 2>/dev/null; then
+      say "- generated files untouched: FAILED ($(echo "$edited" | paste -sd, -) changed; the PR build refuses this)" >>"$report"
+      say "== generated files: FAILED, $(echo "$edited" | paste -sd, -) changed against $base"
+      failed=$((failed + 1))
+    else
+      say "- generated files untouched: ok" >>"$report"
+    fi
+    if git -C "$dir" diff --name-only "$base" HEAD | grep -qE '^(Dockerfile|root/)'; then
+      if git -C "$dir" diff "$base" HEAD -- image.yml | grep -qE '^\+.*date:'; then
+        say "- changelog entry for the Dockerfile/root change: ok" >>"$report"
+      else
+        say "- changelog entry for the Dockerfile/root change: MISSING (add one at the top of changelog: in image.yml)" >>"$report"
+        say "== changelog: no new entry in image.yml for a Dockerfile or root/ change"
+        failed=$((failed + 1))
+      fi
+    fi
+    if git -C "$dir" diff --name-only "$base" HEAD | grep -qx 'Dockerfile' && ! git -C "$dir" diff --name-only "$base" HEAD | grep -qx 'Dockerfile.aarch64'; then
+      say "- both Dockerfiles changed: WARN (Dockerfile changed, Dockerfile.aarch64 did not; they must agree apart from FROM)" >>"$report"
+    fi
+  else
+    skip "generated files and changelog" "on the live branch itself, nothing to compare against"
+  fi
+  local scripts=()
+  if [[ -d "$dir/root" ]]; then
+    while IFS= read -r -d '' file; do
+      head -n1 "$file" | grep -qE '^#!.*(bash|sh)' && scripts+=("${file#"$dir"/}")
+    done < <(find "$dir/root" -type f -print0)
+  fi
+  if (( ${#scripts[@]} )); then
+    if have shellcheck; then
+      step "shellcheck root/" shellcheck -s bash -x "${scripts[@]}"
+    elif have docker; then
+      step "shellcheck root/ (container)" docker run --rm -v "$dir":/mnt -w /mnt "$SHELLCHECK_IMAGE" -s bash "${scripts[@]}"
+    else
+      skip "shellcheck" "neither shellcheck nor Docker"
+    fi
+    local noexec
+    noexec=$(cd "$dir" && find root -path '*/s6-overlay/s6-rc.d/*' \( -name run -o -name finish -o -name check -o -name up \) -type f ! -perm -u+x 2>/dev/null | grep -v '/up$' || true)
+    if [[ -n "$noexec" ]]; then
+      say "- s6 scripts executable: FAILED ($noexec)" >>"$report"
+      failed=$((failed + 1))
+    else
+      say "- s6 scripts executable: ok" >>"$report"
+    fi
+  fi
+  if $build && have docker && docker info >/dev/null 2>&1; then
+    local arch dockerfile=Dockerfile name
+    name=$(image_name "$(basename "$dir")")
+    arch=amd64
+    [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]] && { arch=arm64; dockerfile=Dockerfile.aarch64; }
+    step "docker build ($arch)" docker build --pull --no-cache -f "$dockerfile" -t "harness-local/$name:validate" .
+    local other=arm64 other_file=Dockerfile.aarch64 qemu=qemu-aarch64
+    [[ "$arch" == arm64 ]] && { other=amd64; other_file=Dockerfile; qemu="qemu-x86_64"; }
+    if [[ -e /proc/sys/fs/binfmt_misc/$qemu && -f "$dir/$other_file" ]]; then
+      step "docker build ($other, emulated)" docker buildx build --load --pull --no-cache --platform "linux/$other" -f "$other_file" -t "harness-local/$name:validate-$other" .
+    else
+      skip "docker build ($other)" "no emulation for $other here; the PR build covers it"
+    fi
+    say "- run it: ./harness try --build $(basename "$dir") (waits for [ls.io-init] done.)" >>"$report"
+  else
+    skip "docker build" "$($build && echo "Docker is not available" || echo "--no-build")"
+  fi
+}
+
+validate_mod() {
+  local dir=$1 mods=$repos_dir/docker-mods
+  if have docker && docker info >/dev/null 2>&1; then
+    docker pull --quiet "$BUILDER_IMAGE" >/dev/null
+    step "builder render-mod --check" docker run --rm -v "$dir":/repo --user "$(id -u):$(id -g)" "$BUILDER_IMAGE" render-mod --check
+  else
+    skip "render-mod --check" "Docker is not available"
+  fi
+  if [[ -x "$mods/tools/check-branch.sh" && "$dir" != "$mods" ]]; then
+    local python=python3
+    [[ -x "$repos_dir/builder/.venv/bin/python" ]] && python=$repos_dir/builder/.venv/bin/python
+    step "tools/check-branch.sh" env PYTHON="$python" "$mods/tools/check-branch.sh" "$dir"
+    $build && step "tools/test-mod.sh" "$mods/tools/test-mod.sh" "$dir"
+  else
+    skip "check-branch.sh and test-mod.sh" "work on the mod branch in its own worktree: git -C repos/docker-mods worktree add ../docker-mods-<branch> <branch>"
+  fi
+}
+
+# ---------------------------------------------------------------------------------------------------- drafts
+
+cmd_draft() {
+  local kind=${1:-} repo dir out login role
+  [[ "$kind" =~ ^(pr|issue|review)$ ]] || die "usage: ./harness draft pr|issue|review <repo> [number]"
+  repo=$(resolve_repo "${2:?usage: ./harness draft $kind <repo>}")
+  dir=$(repo_dir "$repo")
+  login=$(jq -r '.login // ""' "$profile" 2>/dev/null || echo "")
+  role=$(role)
+  mkdir -p "$state/drafts"
+  case "$kind" in
+    pr)
+      [[ -e "$dir/.git" ]] || die "$repo is not cloned"
+      local branch base fork=false head
+      branch=$(git -C "$dir" branch --show-current)
+      git -C "$dir" remote get-url upstream >/dev/null 2>&1 && fork=true
+      base=${3:-$(gh repo view "$ORG/$repo" --json defaultBranchRef --jq .defaultBranchRef.name)}
+      head=$branch
+      $fork && head=$login:$branch
+      out=$state/drafts/pr-$repo-${branch//\//-}.md
+      local diffstat validation
+      diffstat=$(git -C "$dir" diff --stat "$($fork && echo upstream || echo origin)/$base...HEAD" 2>/dev/null | tail -n 20 || true)
+      [[ "$branch" == "$base" ]] && warn "you are on $base itself: make a topic branch (git switch -c <topic>) before drafting a PR"
+      validation="  - not run"
+      if [[ -f "$state/validation/$repo.md" ]]; then
+        if grep -q "at \`$(git -C "$dir" rev-parse --short HEAD)\`" "$state/validation/$repo.md"; then
+          validation=$(sed -n 's/^- /  - /p' "$state/validation/$repo.md")
+        else
+          warn "the validation report is for another commit: run ./harness validate $repo again"
+          validation="  - stale: re-run ./harness validate $repo"
+        fi
+      fi
+      sed -e "s|{{repo}}|$repo|g" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" \
+        "$here/templates/pr-body.md" >"$out"
+      {
+        say ""
+        say "<!-- harness-fill: replace the TODOs above; this block is for you, delete it before filing"
+        say "branch: $branch -> $base"
+        say "validation (from .harness/validation/$repo.md):"
+        say "$validation"
+        say "diff:"
+        say "$diffstat"
+        say "file it with:"
+        say "  gh pr create -R $ORG/$repo --base $base --head $head --title \"<short imperative sentence>\" --body-file $out"
+        say "-->"
+      } >>"$out"
+      ;;
+    issue)
+      out=$state/drafts/issue-$repo-$(date +%Y%m%d%H%M%S).md
+      sed -e "s|{{repo}}|$repo|g" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" "$here/templates/issue.md" >"$out"
+      say "<!-- file it with: gh issue create -R $ORG/$repo --title \"<what is wrong, in a sentence>\" --body-file $out -->" >>"$out"
+      ;;
+    review)
+      local number=${3:?usage: ./harness draft review <repo> <number>}
+      out=$state/drafts/review-$repo-$number.md
+      sed -e "s|{{repo}}|$repo|g" -e "s|{{number}}|$number|g" -e "s|{{version}}|$VERSION|g" "$here/templates/review.md" >"$out"
+      say "<!-- post it with: gh pr review $number -R $ORG/$repo --comment --body-file $out (or --approve / --request-changes) -->" >>"$out"
+      ;;
+  esac
+  say "draft: ${out#"$here"/}"
+}
+
+cmd_allow() {
+  need jq
+  local action=${1:-} repo=${2:-} minutes=${3:-30}
+  [[ "$action" =~ ^(push|force-push|tag|delete)$ && -n "$repo" ]] || die "usage: ./harness allow push|force-push|tag|delete <repo> [minutes]"
+  [[ "$(role)" == member ]] || die "only members can grant this; on the contributor path, ask a maintainer in your PR or issue"
+  [[ "$repo" == "*" ]] || repo=$(resolve_repo "$repo")
+  local file=$state/allow.json until
+  until=$(( $(date +%s) + minutes * 60 ))
+  [[ -f "$file" ]] || echo '{}' >"$file"
+  jq --arg key "$action $repo" --argjson until "$until" \
+    'with_entries(select(.value > now)) + {($key): $until}' "$file" >"$file.tmp" && mv "$file.tmp" "$file"
+  say "allowed: $action on $repo for $minutes minutes (the guard hook lets it through until then)"
+}
+
+# ---------------------------------------------------------------------------------------------------- main
+
+usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
+
+main() {
+  local cmd=${1:-help}
+  (( $# )) && shift
+  case "$cmd" in
+    whoami) need jq; cmd_whoami "$@" ;;
+    doctor) cmd_doctor ;;
+    core) cmd_core ;;
+    get) cmd_get "$@" ;;
+    all) cmd_all ;;
+    sync) cmd_sync ;;
+    fork) cmd_fork "$@" ;;
+    setup) cmd_setup "$@" ;;
+    snapshot) cmd_snapshot ;;
+    lookup) cmd_lookup "$@" ;;
+    try) cmd_try "$@" ;;
+    render) cmd_render "$@" ;;
+    validate) cmd_validate "$@" ;;
+    draft) need jq; cmd_draft "$@" ;;
+    allow) cmd_allow "$@" ;;
+    version | --version) say "harness $VERSION" ;;
+    help | -h | --help) usage ;;
+    *) usage; exit 2 ;;
+  esac
+}
+
+main "$@"
