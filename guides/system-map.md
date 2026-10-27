@@ -78,6 +78,8 @@ repo's `image.yml`. Adding an image needs no change to control, the hub or the s
 
 ## Pull requests
 
+[docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6) is kept open as the worked example. Show it to anyone asking what a PR gets.
+
 - **A PR build is a full build and test.**
   - From a member's branch, it pushes `untrusted-pr/<name>:pr-<n>-<sha7>`.
   - From a fork, it runs with a read-only token and no secrets. Its image becomes a workflow artifact and

@@ -65,6 +65,8 @@ response wraps its payload in `data`.
 - `gh search prs --owner linuxserver-playground --state open` and `gh search issues …` search across the org.
   Use `--json` for structured fields.
 - `gh pr view <n> -R linuxserver-playground/<repo> --comments` reads a PR with its report comment.
+  For JSON, use `--json comments --jq '.comments[].body'` instead: `--comments` and `--json` cannot be combined.
+  The report comment starts with `<!-- lsio-build-report -->`.
   `gh pr diff` shows the diff, and `gh pr checks` shows the checks.
 - `gh run list -R linuxserver-playground/<repo> --status failure`, then `gh run view <id> --log-failed`.
   Raw logs are the one thing only GitHub has.

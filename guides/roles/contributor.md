@@ -35,6 +35,9 @@ read org memberships (HTTP 403), they run `gh auth refresh -s read:org`.
 
 ## What happens to your pull request
 
+[docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6) is a reference PR, kept open, that shows all of this: the report
+comment, the screenshots, the package diff and the pullable `untrusted-pr/` image.
+
 1. **GitHub holds the build** until a maintainer clicks "Approve and run". Every push from an outside account
    waits for this.
 2. **The PR build runs** with a read-only token and no secrets: build, test, scan. For an image it takes

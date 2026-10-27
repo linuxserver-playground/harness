@@ -10,7 +10,8 @@
 1. **`./harness snapshot`.** Read `.harness/snapshot/latest/control-pulls.json` (with build state) and
    `gh-prs.json` (labels, comment counts, and PRs in repos control does not track, such as this one).
    Merge the two on repo and number.
-2. **Leave out `[test data]` fixtures,** and say how many you left out.
+2. **Leave out the reference PR** ([docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6), never merged) and any `[test data]` fixtures,
+   and say what you left out.
 3. **For each PR, collect:**
    - repo and kind: image, mod branch, infrastructure (builder, workflows, ci, hub, site, control), docs or
      blog (site `src/content/`), harness;

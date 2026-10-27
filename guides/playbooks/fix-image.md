@@ -53,7 +53,8 @@
     - AI use.
 
     Link the issue. Show the draft, and run the printed `gh pr create` only on approval.
-11. **After filing,** tell the person what happens next:
+11. **After filing,** tell the person what happens next. [docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6) is the reference PR to
+    show them:
     - the PR build;
     - the report comment;
     - for contributors, the approval wait and `safe-to-publish`.

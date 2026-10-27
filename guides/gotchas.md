@@ -72,8 +72,10 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 
 ## Fixtures and noise
 
-- **Issues and PRs titled `[test data]`** in docker-heimdall and docker-bookstack are lorem-ipsum fixtures for
-  testing the site and control. Leave them out of triage and PR rankings, and say how many you left out.
+- **[docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6) is a reference PR, never merged.** Leave it out of PR rankings and reviews
+  unless the person asks about it.
+- **Issues and PRs titled `[test data]`** were lorem-ipsum fixtures, now closed. If any reappear, leave them out
+  of triage and PR rankings.
 
 ## Capacity
 
