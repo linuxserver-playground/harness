@@ -72,11 +72,15 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 - **The site's anchors on image and build pages are a public contract.** Never rename them.
 - **The site has no CORS access to Release assets.** Heavy data such as file trees comes through the hub
   (newest build per branch) or links to the Release.
-- **Don't refresh the site's data against the live hub to test a change.** The build reads the committed
-  snapshot in `src/data/`, so a site change needs no refresh, and a hub change is tested with
-  `npm run data:local` against a local `../hub` build. GitHub Pages rate-limits by IP: an agent that ran two
-  full refreshes (`REFRESH_ALL=1 npm run data`) was answered 429 for every hub URL, including `catalog.json`,
-  for over half an hour. Never commit a refreshed `src/data/` either; the site's Deploy does that.
+- **Don't refresh the site's data against the live hub to test a change.** The build reads the snapshots
+  `npm run snapshot` restores from the site's `data` branch (from git, so it is safe to repeat), so a site
+  change needs no refresh, and a hub change is tested with `npm run data:local` against a local `../hub` build.
+  GitHub Pages rate-limits by IP: an agent that ran two full refreshes (`REFRESH_ALL=1 npm run data`) was
+  answered 429 for every hub URL, including `catalog.json`, for over half an hour.
+- **Generated data is not on main in the hub or the site.** Each keeps it as the one commit of a `data` branch,
+  replaced by CI on every change so its history never grows. The hub's `data/` is a checkout of that branch
+  (`scripts/data.sh`); the site's snapshots are laid over the checkout by `npm run snapshot`. Both paths are
+  ignored on main, and only CI publishes the branch: never push to `data` or add the data back to main.
 
 ## Fixtures and noise
 

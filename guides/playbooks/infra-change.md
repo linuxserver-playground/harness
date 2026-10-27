@@ -38,8 +38,8 @@ change in several repos is a [contract-change](contract-change.md) instead.
 4. **Validate:** `./harness validate <repo>`, plus the checks CI does not run:
    - **site:** overflow at 390px on each changed page; `editor-check.mjs` for the editor; `fleet-check.mjs`
      for fleet pages. To build against the hub as it would be after your hub change, run `npm run data:local`
-     (it needs `../hub` built). A site-only change needs no refresh at all: the build reads the committed
-     snapshot. Never refresh against the live hub to test (`npm run data`, and never `REFRESH_ALL=1`): GitHub
+     (it needs `../hub` built). A site-only change needs no refresh at all: the build reads the snapshots
+     `npm run snapshot` restores from the `data` branch. Never refresh against the live hub to test (`npm run data`, and never `REFRESH_ALL=1`): GitHub
      Pages rate-limits by IP, and a few full refreshes lock that IP out of the hub, site and CI fetches alike
      for half an hour or more.
    - **hub:** if a generator's output changed, update its reference fixtures and say why in the PR.

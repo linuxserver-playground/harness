@@ -47,8 +47,8 @@ These are never edited by hand. Change the source:
 | Image repo `README.md`, `AGENTS.md`, `LICENSE`, `.github/workflows/build.yml`, `pr-report.yml` | `image.yml`, or the builder templates for every repo |
 | Mod branch `README.md`, `AGENTS.md`, `build.yml` | `mod.yml` |
 | `package_versions.txt` | The build |
-| The hub's `data/`, `dist/`, `out/` | The hub's ingest and generators |
-| The site's `src/data/`, `src/content/imagedocs/`, `moddocs/` | The hub's API (`npm run data`) |
+| The hub's `data/` (its `data` branch), `dist/`, `out/` | The hub's ingest and generators |
+| The site's snapshots (its `data` branch): `src/data/`, `src/assets/logos/`, `team/`, `proot-apps/`, `src/content/imagedocs/`, `moddocs/` | The hub's API (`npm run data`) |
 | `unraid-store`, `umbrel-store`, `runtipi-store` | The hub's generators |
 
 A PR to an existing image branch that changes a generated file fails its build. The live build re-renders

@@ -562,6 +562,7 @@ cmd_validate() {
         if [[ "$repo" == builder ]]; then
           step "contracts examples" bash -c '.venv/bin/python -m contracts image examples/*/image.yml'
         elif [[ "$repo" == hub ]]; then
+          step "data/ from the data branch" scripts/data.sh
           step "build the API" "$dir/.venv/bin/python" -m lsio_hub.build
           step "generate --offline" "$dir/.venv/bin/python" -m lsio_hub.generate --offline
         fi
@@ -569,6 +570,7 @@ cmd_validate() {
       workflows) step "scripts/check.sh" ./scripts/check.sh ;;
       site)
         [[ -d "$dir/node_modules" ]] || die "no node_modules in site: ./harness setup site"
+        step "snapshots from the data branch" npm run snapshot
         step "npm run check" npm run check
         step "npm run build" npm run build
         if have npx; then
