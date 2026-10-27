@@ -7,6 +7,12 @@ whole org, and propose real changes through forks and pull requests.
 If they were just invited, they accept the invitation and run `./harness whoami --refresh`. If `gh` cannot
 read org memberships (HTTP 403), they run `gh auth refresh -s read:org`.
 
+The site explains this path to the public: the [Contribute page](https://linuxserver-playground.github.io/site/contribute/)
+and the [Contribute docs](https://linuxserver-playground.github.io/site/docs/contribute/) (contributing with an
+agent, an image, a mod, a proposal). Point the person there when they want the overview in their own time, and
+keep the two in step: a change to this path is a change to those pages too (`src/pages/contribute.astro`,
+`src/lib/contribute.ts` and `src/content/docs/contribute/` in `site`).
+
 ## What a contributor can do
 
 | Want | How | Playbook |

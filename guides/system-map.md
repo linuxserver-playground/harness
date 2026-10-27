@@ -8,7 +8,7 @@ either, they win. Then fix this guide.
 
 | What | Where | Who reads it |
 | --- | --- | --- |
-| Website: images, build pages, fleet board, docs, blog, mods, PRoot Apps, stores | https://linuxserver-playground.github.io/site/ | users and the team. It is the single pane of glass |
+| Website: images, build pages, fleet board, docs, blog, mods, PRoot Apps, stores, and the Contribute page (`/contribute/`) and docs section (`/docs/contribute/`) that send people to this harness | https://linuxserver-playground.github.io/site/ | users and the team. It is the single pane of glass |
 | Hub: static API, store templates, proxy confs, k8s manifests, mods index, PRoot Apps index | https://linuxserver-playground.github.io/hub/ (`openapi.json` lists the endpoints) | the site, the stores, agents |
 | Control plane: scheduler, webhooks, live JSON API, member actions, Discord | https://ci.thelamer.duckdns.org:8443 (`/status`, `/api/*.json`) | the site's fleet pages, the team, agents |
 | Images | `ghcr.io/linuxserver-playground/<name>` | users |

@@ -60,5 +60,7 @@ Either way, a person reads and files every issue, PR and review. The agent draft
   for broad changes. It holds the settled decisions (`DECISIONS.md`) and the working notes the harness links
   to.
 - [The website](https://linuxserver-playground.github.io/site/) shows images, builds, the fleet, docs and the
-  blog. The [hub](https://linuxserver-playground.github.io/hub/) serves the data, and
+  blog. Its [Contribute page](https://linuxserver-playground.github.io/site/contribute/) and
+  [Contribute docs](https://linuxserver-playground.github.io/site/docs/contribute/) are the public way in that
+  sends people here. The [hub](https://linuxserver-playground.github.io/hub/) serves the data, and
   [control](https://ci.thelamer.duckdns.org:8443/status) schedules and tracks builds.

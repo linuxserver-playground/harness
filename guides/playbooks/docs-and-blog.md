@@ -19,7 +19,7 @@ All of these are in `repos/site`. Read its `AGENTS.md` and `CONTRIBUTING.md` fir
 
 | Content | Path | Notes |
 | --- | --- | --- |
-| Docs pages | `src/content/docs/<section>/<slug>.md` | Sections: `general`, `selkies`, `misc`, `faq`. Front matter needs `title`, `description` and `section` (matching the folder); optional `order`, `group`, `tags`, `aliases`. `npm run new-doc` scaffolds one |
+| Docs pages | `src/content/docs/<section>/<slug>.md` | Sections: `general`, `contribute`, `selkies`, `misc`, `faq`. Front matter needs `title`, `description` and `section` (matching the folder); optional `order`, `group`, `tags`, `aliases`. `npm run new-doc` scaffolds one |
 | A new docs section | `src/lib/docs-sections.ts` plus a folder | Members only |
 | Blog posts | `src/content/posts/<slug>/index.md`, images beside it | `title` required; leave out `date`, because git dates the post at merge. `npm run new-post` scaffolds one. Members only |
 | Authors | `src/content/authors/*.yaml` | |
