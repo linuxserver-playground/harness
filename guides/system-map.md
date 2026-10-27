@@ -69,6 +69,11 @@ Control replaces every per-repo cron:
 - hourly upstream checks, using the typed `upstream.version` source in `image.yml`;
 - hourly release checks;
 - weekly package checks (`Update package versions` commits, which deliberately do start a build).
+- the batch build projects (proot-apps daily 00:00 UTC, selkies-layers daily 04:30, wheelie's gap check
+  hourly): each run is dispatched with a `parallel` sized to the slots free after a reserve of 4 for image, hub
+  and site builds (2 to 16), and Discord hears when a unit (a layer, an app, a wheel) starts failing or
+  recovers. Only projects in `CONTROL_BATCH_LIVE` are dispatched; the rest are dry runs beside their own cron.
+  `control/batch.py`, `/api/batch.json`.
 
 Every 30 minutes, and on the first push to a new repo, it rediscovers the fleet from every `docker-*`
 repo's `image.yml`. Adding an image needs no change to control, the hub or the server.

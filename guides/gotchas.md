@@ -81,3 +81,7 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 
 - **20 concurrent jobs is the limit.** A mass dispatch queues for hours and blocks real releases. Pace it in
   batches, and check `/api/queue.json` first.
+- **Batch runs show as a long queue.** selkies-layers, proot-apps and wheelie hold most of their matrix back
+  with `max-parallel`, so `/api/queue.json` can list a hundred queued proot-apps jobs on a fleet with free
+  slots. Read `/api/batch.json` `capacity` instead: it leaves those out. Do not dispatch the batch workflows
+  by hand with a large `parallel`; control sizes them.

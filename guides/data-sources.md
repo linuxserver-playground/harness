@@ -28,7 +28,8 @@ Base: `https://ci.thelamer.duckdns.org:8443`. Its routes are listed in `repos/co
 | `/api/releases.json` | Recent releases | `releases[]`: `release.{repo,tag,published_at,body}` |
 | `/api/images/{name}.json` | One image | `rows[]` (as in fleet), `builds`, `latest`, `open_pulls`, `open_issues` (counts) |
 | `/api/builds/{owner}/{repo}/{run_id}.json` | One build: jobs, steps, timings | |
-| `/api/scheduler.json?image=&kind=&outcome=` | The scheduler's decisions and the next 24 hours | |
+| `/api/scheduler.json?image=&kind=&outcome=` | The scheduler's decisions and the next 24 hours `kind=batch` for the batch projects |
+| `/api/batch.json` | The batch build projects (selkies-layers, proot-apps, wheelie): free runner slots, each project's schedule, live or dry run, the `parallel` a run would get now, last decision and dispatch, failing units | `capacity.{free,running,waiting,held,batch}`, `projects[]`: `repo`, `live`, `parallel_now`, `active_run`, `last_decision`, `failing[]` |
 | `/api/skips.json`, `/api/actions.json` | Skip flags; the public log of member actions | |
 | `/badge/{name}/{tag}.svg` | The CI badge | |
 
