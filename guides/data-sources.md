@@ -50,7 +50,6 @@ response wraps its payload in `data`.
 | `/api/v1/catalog/{name}/builds.json` | Build history (`data.builds[]`): `tag`, `branch`, `created`, `test_success`, `platforms[].{arch,result,size}`, `base`, links |
 | `/api/v1/catalog/{name}/builds/{tag}/tests.json` | Tests per arch (`data.summary.<arch>`: `passed`, `failed`, `failed_tests`, `startup_seconds`, `listening_ports`, `warnings`) |
 | `…/builds/{tag}/diff.json` | What changed against the previous release (`data.diff`): `packages`, `dockerfile`, `config`, `upstream`, `base`, `size`, `classification`, `reasons` |
-| `…/builds/{tag}/vulns.json` | The grype scan (`data.summary`: counts by severity, `fixed`/`unfixed`; `data.matches[]`; `caveats`) |
 | `…/builds/{tag}/packages.{arch}.json`, `layers.{arch}.json`, `report.json` | Package table, layers, the full build record |
 | `/api/v1/catalog/{name}/{docs,mods,proxy}.json`, `docker-compose.yml`, `kubernetes.yaml`, `quadlet.container` | Per-image artefacts |
 | `/api/v1/packages.json`, `/api/v1/packages/{package}.json` | Every package across the fleet; one package's `holders[]`: `image`, `tag`, `branch`, `arch`, `version`, `type` |
@@ -70,6 +69,7 @@ Each image repo's own Pages serves its heavy build files for the newest 5 builds
 | `index.json` | The builds held (`builds[]`: `tag`, `branch`, `published_at`, `arches`) |
 | `builds/<tag>/<arch>/` | The test report files: `screenshot.png`, `container.log`, `browser.log`, `sysinfo.txt`, `package_diff.txt` |
 | `builds/<tag>/files.<arch>.json.gz`, `packages.<arch>.json.gz` | The file tree and the SBOM package table (gzip, no `Content-Encoding`: `curl … \| gunzip`) |
+| `builds/<tag>/vulns.json` | The grype scan made when the image was released, never rescanned: best effort, not a security feed (`summary`: counts by severity, `fixed`/`unfixed`; `matches[]`; `db_date`; `caveats`) |
 
 Older builds are only on their GitHub Release, with `run.json` (the run's jobs and steps) and `logs.zip`.
 
@@ -114,7 +114,7 @@ curl -fsS $H/fleet/bases.json | jq -r '.data.bases[] | select(.image | test("bas
 # One build's tests, vulnerabilities and what changed
 curl -fsS $H/catalog/sonarr/builds.json | jq -r '.data.builds[0].tag'
 curl -fsS $H/catalog/sonarr/builds/<tag>/tests.json | jq '.data.summary'
-curl -fsS $H/catalog/sonarr/builds/<tag>/vulns.json | jq '.data.summary'
+curl -fsS https://linuxserver-playground.github.io/docker-sonarr/builds/<tag>/vulns.json | jq '.summary'
 curl -fsS $H/catalog/sonarr/builds/<tag>/diff.json | jq '.data.diff | {classification, reasons, packages}'
 ```
 

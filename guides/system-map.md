@@ -22,7 +22,7 @@ either, they win. Then fix this guide.
 | `workflows` | The reusable `image-build.yml` and `mod-build.yml`, one composite action per step, and `pr-report.yml` | The floating tag `v1` moves to the new commit. Image repos call `@v1` |
 | `ci` | The container test harness. It runs each built image, takes screenshots, and writes the test report and bundle | Push to main publishes `ci:latest`, which the workflows pull |
 | `dumper` | A Rust static file-tree walker for the bundle | A GitHub Release. The workflows fetch `releases/latest` |
-| `hub` | Ingests each release's `build.json` and `record.json` into `data/` (its `data` branch, one commit), serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index, the PRoot Apps index and build pages. `refresh.yml` runs hourly: stars, GHCR tags, mods, PRoot Apps (proot-apps' `metadata.yml`), vulnerability rescans, and pushes the store repos | A push to main, the hourly refresh, or `repository_dispatch image-released` |
+| `hub` | Ingests each release's `build.json` and `record.json` into `data/` (its `data` branch, one commit), serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index, the PRoot Apps index and build pages. `refresh.yml` runs hourly: stars, GHCR tags, mods, PRoot Apps (proot-apps' `metadata.yml`), and pushes the store repos | A push to main, the hourly refresh, or `repository_dispatch image-released` |
 | `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | A push to main, `hub-updated` (relayed by control after every hub deploy), or the daily cron |
 | `control` | A FastAPI GitHub App on a small server (n97). It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the server pulls it within 5 minutes |
 | `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
@@ -61,8 +61,8 @@ helper. The fleet board lists it apart from the images.
    `data/` as the one commit of its `data` branch, renders the API and deploys Pages. From then on the build's
    site page works: the site's 404 page renders new builds live from the hub API (`LiveBuildPage`).
 7. **Control sends `hub-updated`** to the site, which rebuilds and makes the new pages static.
-8. **Hourly,** the hub's `refresh.yml` reads stars and GHCR tags, rescans vulnerabilities when grype's
-   database moved, refreshes the mods index, and asks for a Deploy.
+8. **Hourly,** the hub's `refresh.yml` reads stars and GHCR tags, refreshes the mods index, and asks for a
+   Deploy.
 
 `repos/workspace/docs/delivery-latency.md` measures this path.
 
