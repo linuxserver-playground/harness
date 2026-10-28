@@ -23,6 +23,13 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   the tagged commit, and an upstream-triggered release tags an old head, so date filters on Releases miss them.
   GHCR package versions carry the push time.
 
+## Issues and pull requests
+
+- **A bot answers every new issue and pull request within a minute or two** (`lsio-playground-triage[bot]`). Its
+  comment is a first guess written by an AI from the hub's data, not a maintainer's verdict: correct it in the
+  thread if it is wrong. It replies again only to the thread's author, at most three times. A maintainer stops it
+  on a thread with the `no-bot` label.
+
 ## Generated files
 
 - **On a PR, never commit `builder render` output.** Some older docs (the org CONTRIBUTING, the PR template,
