@@ -44,6 +44,15 @@ request per live branch carrying the whole image, for the team to review. Mergin
    git push -u origin <default branch>
    ```
 
+   Then turn on the repo's Pages site, which serves its builds' screenshots, logs and file trees to the
+   website. Pages deploys from Actions, and the `github-pages` environment gets no branch rule so every live
+   branch can deploy. Control does not do this; it only reports an image repo without Pages.
+
+   ```bash
+   gh api -X POST repos/linuxserver-playground/docker-<name>/pages -f build_type=workflow
+   gh api -X PUT repos/linuxserver-playground/docker-<name>/environments/github-pages --input - <<<'{"deployment_branch_policy":null}'
+   ```
+
    - `[skip ci]` stops a build of a branch that has no `image.yml` yet. Control lists the repo as a helper
      until the merge.
    - `pr-report.yml` has to be on the default branch so the first PR gets its report comment.
