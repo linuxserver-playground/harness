@@ -70,7 +70,9 @@ helper. The fleet board lists it apart from the images.
 
 Control replaces every per-repo cron:
 
-- hourly upstream checks, using the typed `upstream.version` source in `image.yml`;
+- hourly upstream checks, using the `upstream.version` source in `image.yml`: every type but `os` and
+  `deb_repo`, `command` included (control runs it as nobody in a sandbox, `control/sandbox.py`). Prefer a typed
+  source; `command` is for what none of them can say;
 - hourly release checks;
 - weekly package checks (`Update package versions` commits, which deliberately do start a build).
 - hourly mod checks, for the docker-mods branches whose `mod.yml` has an `upstream` block (the Jenkins

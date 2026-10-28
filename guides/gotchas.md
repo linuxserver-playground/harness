@@ -15,6 +15,14 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 - **`Update package versions` commits deliberately start a build**: that push is what releases new packages.
   `Update generated files [skip ci]` deliberately does not.
 
+- **Prefer a typed `upstream.version` source to `command`.** `github_release` (with `include`, `exclude`,
+  `prerelease`, `sort: version`), `deb_packages`, `alpine_apk`, `arch_package`, `json` (jq, `sort: version`),
+  `regex` (a page, or `search: url` for a redirect), `static` and `combined` cover almost every shape a
+  legacy curl pipeline had. Prove a new source against the old command's output before you push it.
+- **Count builds from GHCR, not Releases.** A release's `created_at` (and GraphQL's `createdAt`) is the date of
+  the tagged commit, and an upstream-triggered release tags an old head, so date filters on Releases miss them.
+  GHCR package versions carry the push time.
+
 ## Generated files
 
 - **On a PR, never commit `builder render` output.** Some older docs (the org CONTRIBUTING, the PR template,
