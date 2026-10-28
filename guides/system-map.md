@@ -52,7 +52,11 @@ helper. The fleet board lists it apart from the images.
    `builder record` derives `record.json`: package tables, the diff against the previous release, a grype
    scan, base layers. A GitHub Release carries the bundle.
 5. **The workflow POSTs signed events to control** `/events`. Control posts to Discord (held at
-   "publishing" until the hub serves the build) and sends the hub `image-released`.
+   "publishing" until the hub serves the build) and sends the hub `image-released`. Publish then deploys the
+   image repo's own Pages from its Releases: the newest 5 builds per live branch, with their screenshots, test
+   logs, file trees and package tables, which the site reads cross-origin. When the run completes, control
+   attaches `run.json` and `logs.zip` to the Release, the permanent record of a build once it is older than
+   the site's five.
 6. **The hub's Deploy** reconciles the whole org over GraphQL, ingests every release `data/` lacks, publishes
    `data/` as the one commit of its `data` branch, renders the API and deploys Pages. From then on the build's
    site page works: the site's 404 page renders new builds live from the hub API (`LiveBuildPage`).

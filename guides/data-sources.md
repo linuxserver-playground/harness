@@ -60,7 +60,18 @@ response wraps its payload in `data`.
 | `/api/v1/proot-apps.json` | The PRoot Apps catalogue (`data.apps[]`: `name`, `title`, `category`, `description`, `platforms`, `icon`, `image`, `url`; disabled apps left out) and `data.cli` (the CLI's newest release, absent until there is one). Read hourly from proot-apps' `metadata/metadata.yml`; the site's `/proot-apps/` renders it |
 | `/api/v1/mods.json` | Every mod (`data.mods[]`): `name`, `branch`, `target`, `applies_to`, `maintainers`, `deprecated`, and `builds[]` per version line (default line first, `line` absent for it): `version`, `built_at`, `pin` (the exact tag), the floating `tags`, `digest`, `revision`. Read hourly from the GHCR `mods` package by the hub's `refresh.yml`, so a new mod build shows there (and on its site page) after the next refresh |
 | `/api/v1/{categories,stats}.json`, `/api/v1/stores/index.json` | Categories, fleet statistics, store index |
-| `/builds/<image>/<tag>/` | Screenshots (`<arch>/screenshot.png`), `container.log`, `files.<arch>.json.gz` (newest build per branch) |
+| `/builds/<image>/<tag>/` | The hub's report page of a build; its files link to the image repo's Pages (below) |
+
+Each image repo's own Pages serves its heavy build files for the newest 5 builds per live branch,
+`https://linuxserver-playground.github.io/docker-<name>/` (CONVENTIONS §6, "Repo Pages"):
+
+| Path | What |
+| --- | --- |
+| `index.json` | The builds held (`builds[]`: `tag`, `branch`, `published_at`, `arches`) |
+| `builds/<tag>/<arch>/` | The test report files: `screenshot.png`, `container.log`, `browser.log`, `sysinfo.txt`, `package_diff.txt` |
+| `builds/<tag>/files.<arch>.json.gz`, `packages.<arch>.json.gz` | The file tree and the SBOM package table (gzip, no `Content-Encoding`: `curl … \| gunzip`) |
+
+Older builds are only on their GitHub Release, with `run.json` (the run's jobs and steps) and `logs.zip`.
 
 ## GitHub
 
