@@ -24,7 +24,9 @@
 4. **Upstream drift:** rows with `drift == "ahead"`, where upstream moved but nothing was released. Check
    `next_check` and `last_outcome`, and whether a build is running or failed.
 5. **Skips:** `control-skips.json`. Note each skip flag and its age. A forgotten skip silently stops releases.
-6. **Helper repos:** `helpers[].failing` (for example docker-mods branches).
+6. **Helper repos:** `helpers[].failures` (docker-mods branches, each with its failed run) and, from
+   `/api/batch.json`, `projects[].failing` (the proot-apps apps, selkies layers and wheelie builds whose newest
+   job failed). The site shows both below the fleet board.
 7. **Runners:** `control-queue.json` (`in_use`/`limit`, queued). Note any stuck runs in
    `control-runs.json` `active` that started hours ago.
 8. **Hub and site:** `hub-status.json`, covering health, source freshness and rejected releases. Check the

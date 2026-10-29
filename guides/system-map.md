@@ -38,7 +38,8 @@ yq, unrar, build-agent…). Bases and tools build like any image, but stay out o
 artefacts.
 
 **Helper repos.** A `docker-*` repo with no `image.yml` on its default branch, such as `docker-mods`, is a
-helper. The fleet board lists it apart from the images.
+helper. The fleet board lists it apart from the images, in a helper repositories section below the board with
+the batch projects (proot-apps, selkies-layers, wheelie): one card each, then one table of failures per repo.
 
 ## From a push to the website
 

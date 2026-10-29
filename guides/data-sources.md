@@ -20,7 +20,7 @@ Base: `https://ci.thelamer.duckdns.org:8443`. Its routes are listed in `repos/co
 | Endpoint | Holds | Useful fields |
 | --- | --- | --- |
 | `/api/status.json` | Control's own health: GitHub App, scheduler, last discovery, counts, recent webhook deliveries | `counts`, `last_discovery`, `scheduler` |
-| `/api/fleet.json` | Every image × live branch | `rows[]`: `repo`, `image`, `branch`, `result` (success/failure), `version_tag`, `released_at`, `upstream`, `drift` (same/ahead/unknown), `next_check`, `last_outcome`, `skip[]`. `helpers[]`: helper repos with `failing[]` branches |
+| `/api/fleet.json` | Every image × live branch | `rows[]`: `repo`, `image`, `branch`, `result` (success/failure), `version_tag`, `released_at`, `upstream`, `drift` (same/ahead/unknown), `next_check`, `last_outcome`, `skip[]`. `helpers[]`: helper repos with `failing[]` branches and `failures[]` (`branch`, `run_id`, `conclusion`, `html_url`, `at`) |
 | `/api/runs.json` | Runs in progress and recent ones | `active[]`, `recent[]`: `repo`, `workflow_name`, `event`, `branch`, `conclusion`, `html_url` |
 | `/api/queue.json` | Runner use against the 20-job limit | `in_use`, `limit`, `queued[]`, `in_progress[]` |
 | `/api/pulls.json` | Every open PR in the org, with its latest build | `pulls[]`: `pull.{repo,number,title,author,draft,head_fork,review_state,created_at,updated_at}`, `run.{conclusion,html_url}`, `quarantine_tag` (the pullable PR image) |
