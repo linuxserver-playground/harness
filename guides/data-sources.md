@@ -47,7 +47,7 @@ response wraps its payload in `data`.
 | `/health.json`, `/api/v1/status.json` | Hub health, image count, freshness of each source, rejected releases |
 | `/api/v1/images.json` | The v1 image list (`data.repositories.linuxserver[]`): name, version, category, stars, tags, architectures |
 | `/api/v1/catalog.json`, `/api/v1/catalog/{name}.json` | Full image detail (`data.image`): `kind`, `base`, `config.{ports,volumes,env_vars}`, `tags`, `changelog`, `snippets`, `links` |
-| `/api/v1/catalog/{name}/builds.json` | Build history (`data.builds[]`): `tag`, `branch`, `created`, `test_success`, `platforms[].{arch,result,size}`, `base`, links |
+| `/api/v1/catalog/{name}/builds.json` | Build history (`data.builds[]`): `tag`, `branch`, `created`, `test_success`, `platforms[].{arch,result,size}`, `base`, `index_digest` (what an image built on this build records as `base.digest`), links |
 | `/api/v1/catalog/{name}/builds/{tag}/tests.json` | Tests per arch (`data.summary.<arch>`: `passed`, `failed`, `failed_tests`, `startup_seconds`, `listening_ports`, `warnings`) |
 | `…/builds/{tag}/diff.json` | What changed against the previous release (`data.diff`): `packages`, `dockerfile`, `config`, `upstream`, `base`, `size`, `classification`, `reasons` |
 | `…/builds/{tag}/packages.{arch}.json`, `layers.{arch}.json`, `report.json` | Package table, layers, the full build record |
@@ -57,6 +57,7 @@ response wraps its payload in `data`.
 | `/api/v1/fleet/staleness.json` | Builds on an older base digest than the newest one seen (`data.stale[]` with `reason`) |
 | `/api/v1/changelog.json` | Recent changelog entries fleet-wide (`data.changelog[]`: `image`, `date`, `desc`) |
 | `/api/v1/proot-apps.json` | The PRoot Apps catalogue (`data.apps[]`: `name`, `title`, `category`, `description`, `platforms`, `icon`, `image`, `url`; disabled apps left out) and `data.cli` (the CLI's newest release, absent until there is one). Read hourly from proot-apps' `metadata/metadata.yml`; the site's `/proot-apps/` renders it |
+| `…/builds/{tag}.json` | The build's record (`data.build`): `build.json` as the Release carries it, with `init_graph.units[]` (`name`, `type`, `depends_on`, `source`: `image` for the units the repository ships, `base` for inherited ones, `mod`; `script` for the image's own units only). An inherited unit's script is in the base image's build: follow `base.digest` to the base's build with that `index_digest` (the site's init graph walks the chain, selkies on ubuntu included) |
 | `/api/v1/mods.json` | Every mod (`data.mods[]`): `name`, `branch`, `target`, `applies_to`, `maintainers`, `deprecated`, and `builds[]` per version line (default line first, `line` absent for it): `version`, `built_at`, `pin` (the exact tag), the floating `tags`, `digest`, `revision`. Read hourly from the GHCR `mods` package by the hub's `refresh.yml`, so a new mod build shows there (and on its site page) after the next refresh |
 | `/api/v1/{categories,stats}.json`, `/api/v1/stores/index.json` | Categories, fleet statistics, store index |
 | `/builds/<image>/<tag>/` | The hub's report page of a build; its files link to the image repo's Pages (below) |
