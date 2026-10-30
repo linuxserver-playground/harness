@@ -120,3 +120,8 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   with `max-parallel`, so `/api/queue.json` can list a hundred queued proot-apps jobs on a fleet with free
   slots. Read `/api/batch.json` `capacity` instead: it leaves those out. Do not dispatch the batch workflows
   by hand with a large `parallel`; control sizes them.
+- **When GitHub is degraded, wait before fixing.** Check githubstatus.com first. Control retries 5xx reads, asks
+  for lost webhooks again within 5 minutes of noticing any, heals lost completions every 5 minutes, and the site's
+  refresh skips a build the hub does not serve yet. A run that looks stuck, a site Deploy that failed on a 404 or
+  a backfill error on `/status` during an incident usually repairs itself; the workspace's
+  `docs/github-outage-2026-10-30.md` lists what does and what does not.
