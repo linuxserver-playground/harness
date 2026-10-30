@@ -11,6 +11,13 @@ does. **Asks like:**
 ([templates/change-train.md](../../templates/change-train.md)), and one PR per repo, in order, each linked to
 it.
 
+## Read first
+
+The site's maintainer reference explains what exists before you add to it: every `image.yml` field and what it
+drives (`/docs/maintain/image-manifest/`), every version source and `require_assets` (`/docs/maintain/version-sources/`),
+and the render pipeline from manifest to README, AGENTS.md, workflows, hub API and site, with the file to edit
+for each change (`/docs/maintain/generated-files/`). Keep those pages true when the train lands.
+
 ## Why a train
 
 The contract (`builder/CONVENTIONS.md`, `builder/schemas/`) is consumed by every other repo, and the hub and
