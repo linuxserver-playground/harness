@@ -23,7 +23,8 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   after, sometimes an hour later, and a build dispatched in between fails on an empty asset list. Name what
   the Dockerfiles download under `upstream.version.require_assets` (`{asset: <regex>}` on the asset's file name
   for release sources, a `${VERSION}` URL template elsewhere, one entry per asset): control then records
-  "assets not ready" and tries again hourly, and posts to Discord after six such checks. A Dockerfile that
+  "assets not ready" and tries again hourly, and posts to Discord on every such check (amber, then red from
+  the fifth) with the pattern and the names that were uploaded, so a renamed asset is read off the embed. A Dockerfile that
   reads `releases/latest` for its assets should look the release up by the version arg instead, so the check
   and the build see the same release.
 - **Count builds from GHCR, not Releases.** A release's `created_at` (and GraphQL's `createdAt`) is the date of
