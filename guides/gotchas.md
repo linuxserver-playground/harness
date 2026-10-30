@@ -19,6 +19,13 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   `prerelease`, `sort: version`), `deb_packages`, `alpine_apk`, `arch_package`, `json` (jq, `sort: version`),
   `regex` (a page, or `search: url` for a redirect), `static` and `combined` cover almost every shape a
   legacy curl pipeline had. Prove a new source against the old command's output before you push it.
+- **A release can exist before its assets do.** Projects cut the GitHub release first and upload the binaries
+  after, sometimes an hour later, and a build dispatched in between fails on an empty asset list. Name what
+  the Dockerfiles download under `upstream.version.require_assets` (`{asset: <regex>}` on the asset's file name
+  for release sources, a `${VERSION}` URL template elsewhere, one entry per asset): control then records
+  "assets not ready" and tries again hourly, and posts to Discord after six such checks. A Dockerfile that
+  reads `releases/latest` for its assets should look the release up by the version arg instead, so the check
+  and the build see the same release.
 - **Count builds from GHCR, not Releases.** A release's `created_at` (and GraphQL's `createdAt`) is the date of
   the tagged commit, and an upstream-triggered release tags an old head, so date filters on Releases miss them.
   GHCR package versions carry the push time.
