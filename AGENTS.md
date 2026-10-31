@@ -16,8 +16,8 @@ templates for what you write, and hooks that keep each role on its own path.
 
 ## First, every session
 
-1. **Run `./harness whoami`.** The SessionStart hook has normally already done this, so check the briefing in
-   your context. It says whether the person is a **member** of the org or a **contributor**, and it names
+1. **Run `./harness whoami`.** The SessionStart hook normally does this and puts a briefing in your context;
+   when no briefing is there (an agent started without hooks), run it yourself. It says whether the person is a **member** of the org or a **contributor**, and it names
    their role guide. Read that guide: [guides/roles/member.md](guides/roles/member.md) or
    [guides/roles/contributor.md](guides/roles/contributor.md).
 2. **Make sure the repos you need are cloned.** `./harness core` clones the infrastructure repos and the
@@ -38,6 +38,7 @@ The person may be new to working with an agent. When they seem unsure what to as
 | Prioritise the open issues | [triage-issues](guides/playbooks/triage-issues.md) | yes, and may label | yes (read-only) |
 | Understand a bug, a PR, a red build or an error | [explain](guides/playbooks/explain.md) | yes | yes |
 | Know what a change would break or touch | [consequences](guides/playbooks/consequences.md) | yes | yes |
+| Answer a question across the fleet ("which images…", "how many branches…") | [data-sources](guides/data-sources.md), "The whole dataset at once" (`./harness data`); no playbook | yes | yes |
 | Review a pull request | [review](guides/playbooks/review.md) | yes, and may post | locally only |
 | See how the fleet is doing | [fleet-health](guides/playbooks/fleet-health.md) | yes | yes |
 | Catch up on what changed | [whats-new](guides/playbooks/whats-new.md) | yes | yes |

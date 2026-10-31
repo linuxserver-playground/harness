@@ -19,8 +19,13 @@
    1. Find the failing job and step. Use `gh run view <id> --log-failed`, or the run summary's report.
    2. **Upstream?** Check whether the upstream release or package is broken, half-published (one
       architecture missing), or yanked. Check the upstream repo's releases and the version source in
-      `image.yml` (`upstream.version`).
-   3. **Network?** GHCR 5xx, mirror timeouts, rate limits. One rerun settles it.
+      `image.yml` (`upstream.version`). Our branch is upstream's head plus the conversion commits:
+      `git -C repos/docker-<name> fetch -q linuxserver` (the read-only remote `./harness get` adds) and the
+      Jenkins status on that head, `gh api repos/linuxserver/docker-<name>/commits/<branch>/status --jq .state`,
+      say whether the same source is red on live too.
+   3. **Network?** GHCR 5xx, mirror timeouts, rate limits, `curl: (28) Failed to connect` to the project's
+      download host. One rerun settles it. Control never re-runs a failure inside the image build or the
+      tests on its own, and a failed `packages` run spends the week's slot, so the rerun is yours to offer.
    4. **Pipeline?** The same step failing across unrelated images since a `workflows`, `ci` or `builder`
       change. Compare the timing with `git log` in those repos and the `v1` tag date.
    5. **The image itself?** A Dockerfile or `root/` change, or a new upstream version that needs a new
@@ -33,7 +38,12 @@
    pipeline's own commits is a base or package refresh, not a LinuxServer change. Package changes that came with
    the base belong to the base builds in between. `./harness lookup <image>` prints the line for the newest
    release, and the scheduler's newest decisions say why a build did or did not go out (`info.reason`:
-   cooldown, assets not ready, a skip flag).
+   cooldown, assets not ready, a skip flag). First check that the record is the one that minted the tag: a
+   `manual` or `rebuild` run on a released head republishes the tag with a new record, so compare the Release's
+   `published_at` with the record's `created` (`./harness lookup` marks the tag REPUBLISHED when they differ by
+   an hour or more) and read the dispatch that made the tag from `/api/scheduler.json?image=<name>&outcome=dispatch`.
+   A `workflow_dispatch` by a person appears in neither control list; `gh api repos/<org>/<repo>/actions/runs/<id> --jq .triggering_actor.login`
+   names them (control's own dispatches show as its App).
 4. **For a bug report,** reproduce it where you can: `./harness try <image> <tag>`, then follow the reported
    steps. Try the previous tag too, to see whether it is a regression. Read the code paths in the cloned
    repos (`root/etc/s6-overlay/s6-rc.d/*/run`, the Dockerfile, init scripts).

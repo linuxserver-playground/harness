@@ -9,8 +9,10 @@ this machine can do.
 ```bash
 ./harness try sonarr                    # the released :latest
 ./harness try sonarr develop            # another tag
-./harness try heimdall ghcr.io/linuxserver-playground/untrusted-pr/heimdall:pr-5-90f56a5   # a PR build
+./harness try heimdall ghcr.io/linuxserver-playground/untrusted-pr/heimdall:pr-6-cda7401   # a PR build (control's pulls.json: quarantine_tag)
 ./harness try --build docker-heimdall   # build the checkout (host arch, --pull --no-cache) and run it
+./harness try heimdall --env DOCKER_MODS=ghcr.io/linuxserver-playground/mods:universal-package-install --env INSTALL_PACKAGES=htop
+                                        # the released image with a mod (or any extra variable) applied
 ./harness try --stop                    # stop every harness-try container
 ```
 

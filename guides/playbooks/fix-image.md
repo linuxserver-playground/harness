@@ -7,12 +7,21 @@
 - "Add an env var to change the default port."
 - "The README for X is wrong."
 
-**Output:** a pull request draft to the right live branch, validated and run locally.
+**Output:** a pull request draft to the right live branch, validated and run locally. Or, when the ladder says
+the change is not the image's job, the mod or custom-script answer with proof that it works (below).
 
 ## Before writing code
 
 1. **Is it the image's job?** Check the decision ladder ([report-bug](report-bug.md) step 2). An extra package
-   that only some users need is a mod. "It is only a few lines" is not a reason to put it in the image.
+   that only some users need is a mod. "It is only a few lines" is not a reason to put it in the image. This is
+   the usual outcome of "add package X", so finish it properly:
+   - find an existing mod: `curl -fsS https://linuxserver-playground.github.io/hub/api/v1/mods.json | jq -r '.data.mods[] | "\(.branch): \(.summary)"'`.
+     `universal-package-install` installs any Alpine or Ubuntu package at start (`INSTALL_PACKAGES=htop|nano`);
+   - prove it on the released image: `./harness try <image> --env DOCKER_MODS=ghcr.io/linuxserver-playground/mods:<branch> --env INSTALL_PACKAGES=<pkg>`,
+     then `docker exec harness-try-<image> <pkg> --version`;
+   - give the person the compose lines (the full `ghcr.io/linuxserver-playground/mods:` name), the mod's page
+     (`/mods/<branch>/`), and the `/custom-cont-init.d` one-liner for a single box. Draft no PR. Offer the image
+     change only if they insist, with the reviewer's likely answer stated.
 2. **Is there an open PR or issue?** Check `./harness lookup <image>`.
 3. **Which branch?** `./harness lookup <image>` lists the live branches. Each has its own `image.yml`. Target
    the one the change applies to, and do the change separately per branch if it applies to several.
@@ -35,7 +44,7 @@
    | A new env var, port, volume or device | `image.yml` `runtime.*`, plus the code that reads it in `root/`. Env vars are a last resort |
    | Test settings (web port, startup delay) | `image.yml` `test.*` |
    | The project's donation links: the image page's support panel, `.github/FUNDING.yml`, `root/donate.txt` | `image.yml` `upstream.sponsor`, a list of `{name, url}` pointing at unambiguous donation pages. The two files are generated from it |
-   | Release notes on the build page (empty, or the wrong ones) | `image.yml` `upstream.notes`: a notes source (a GitHub release body, `rss`, `json`…) with a `transform` when the notes tag spells the version differently (`/docs/maintain/version-sources/`). `repos/workspace/docs/upstream-notes-inventory.md` records which images have nothing machine-readable upstream, so read it before probing |
+   | Release notes on the build page (empty, or the wrong ones) | `image.yml` `upstream.notes`: a notes source (a GitHub release body, `rss`, `json`…) with a `transform` when the notes tag spells the version differently (`/docs/maintain/version-sources/`). `repos/workspace/docs/upstream-notes-inventory.md` records which images have nothing machine-readable upstream, so read it before probing; its totals are from its date, so recount from `./harness data` |
    | A Dockerfile downloads a release asset | `image.yml` `upstream.version.require_assets`, one entry per asset, and the Dockerfile looks the release up by the version arg, never `releases/latest` (gotchas, "A release can exist before its assets do") |
 
 5. **Add a changelog entry** at the top of `changelog:` in `image.yml` for any Dockerfile or `root/` change.

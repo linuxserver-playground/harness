@@ -29,7 +29,7 @@ person's explicit go-ahead.
 
 | Action | Instead | When it is right, the person runs |
 | --- | --- | --- |
-| Push to the default or a live branch of an existing repo | A topic branch and a PR | `./harness allow push <repo>`: a playbook step such as the release-workflows main push, or an urgent fix the team agreed to |
+| Push to the default or a live branch of an existing repo | A topic branch and a PR | `./harness allow push <repo>`: an urgent fix the team agreed to, or a fleet-wide `FROM` change the team chose to push rather than review 80 times |
 | Force-push or delete those branches | Never, normally | `./harness allow force-push <repo>` |
 | Move or force-push a tag (`v1`) | The [fleet-ops](../playbooks/fleet-ops.md) release-workflows steps | `./harness allow tag workflows` |
 | Delete a repo or packages | The remove-image steps in [fleet-ops](../playbooks/fleet-ops.md) | `./harness allow delete <repo>` |

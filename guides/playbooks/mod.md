@@ -39,7 +39,8 @@ Existing mods: `curl -fsS https://linuxserver-playground.github.io/hub/api/v1/mo
 
 ## Steps: change an existing mod
 
-1. **Get it:** `./harness get docker-mods` (master only). Then
+1. **Get it:** `./harness get docker-mods` (a single-branch clone: `git branch -r` lists only `master`;
+   `git ls-remote --heads origin` lists every mod). Then
    `git -C repos/docker-mods fetch origin <branch>:<branch>` and
    `git -C repos/docker-mods worktree add ../docker-mods-<branch> <branch>`. The worktree lives at
    `repos/docker-mods-<branch>`.

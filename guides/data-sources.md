@@ -26,7 +26,7 @@ Base: `https://ci.thelamer.duckdns.org:8443`. Its routes are listed in `repos/co
 | --- | --- | --- |
 | `/api/status.json` | Control's own health: GitHub App, scheduler, last discovery, counts, recent webhook deliveries, what it is repairing | `counts`, `last_discovery`, `scheduler`, `healing` (Pages deploys it is retrying, runs it will re-run) |
 | `/api/fleet.json` | Every image × live branch | `rows[]`: `repo`, `image`, `branch`, `result` (success/failure), `version_tag`, `released_at`, `upstream`, `drift` (same/ahead/unknown), `next_check`, `last_outcome`, `skip[]` (scopes), `skips[]` (`scope`, `reason`, `set_by`, `set_at`). `helpers[]`: helper repos with `failing[]` branches and `failures[]` (`branch`, `run_id`, `conclusion`, `html_url`, `at`) |
-| `/api/runs.json`, `/api/runs/{id}.json` | Runs in progress and recent ones; one run with its jobs and steps timeline | `active[]`, `recent[]`: `repo`, `workflow_name`, `event`, `branch`, `conclusion`, `html_url` |
+| `/api/runs.json`, `/api/runs/{id}.json` | Runs in progress and recent ones; one run with its jobs and steps timeline | `recent[]` is flat: `repo`, `workflow_name`, `event`, `branch`, `conclusion`, `html_url`. `active[]` is nested: `run.{…the same…}`, `jobs[]`, `elapsed_seconds`, `stuck` |
 | `/api/queue.json` | Runner use against the 20-job limit | `in_use`, `limit`, `queued[]`, `in_progress[]` |
 | `/api/pulls.json` | Every open PR in the org, with its latest build | `pulls[]`: `pull.{repo,number,title,author,draft,head_fork,review_state,created_at,updated_at}`, `run.{conclusion,html_url}`, `quarantine_tag` (the pullable PR image) |
 | `/api/issues.json` | Every open issue | `issues[]`: `repo`, `number`, `title`, `author`, `labels[]`, `created_at` |
@@ -35,7 +35,7 @@ Base: `https://ci.thelamer.duckdns.org:8443`. Its routes are listed in `repos/co
 | `/api/builds/{owner}/{repo}/{run_id}.json` | One build: jobs, steps, timings | |
 | `/api/scheduler.json?image=&kind=&outcome=` | The scheduler's decisions and the next 24 hours. `kind=batch` for the batch projects, `image=mods` (kind `mod`) for the mods with an upstream block | `decisions[]`: `decision.{at,image,branch,kind,outcome}` (`kind`: upstream, release, packages, manual, batch, mod, heal; `outcome`: dispatch, skipped, unchanged, error), `info.reason` for a skip (`cooldown`, `assets not ready`, `skip` with the flag's `scope` and `note`, `run in progress`, `os image: builds on the package check`, `source not resolvable by control`), `run` when one was dispatched; `upcoming[]` |
 | `/api/batch.json` | The batch build projects (selkies-layers, proot-apps, wheelie): free runner slots, each project's schedule, live or dry run, the `parallel` a run would get now, last decision and dispatch, failing units | `capacity.{free,running,waiting,held,batch}`, `projects[]`: `repo`, `live`, `parallel_now`, `active_run`, `last_decision`, `failing[]` |
-| `/api/skips.json`, `/api/actions.json` | Skip flags; the public log of member actions | |
+| `/api/skips.json`, `/api/actions.json` | Skip flags; the public log of member actions made on the site (a `gh workflow run` from a terminal is not in it: the run's `triggering_actor` is) | |
 | `/api/stream` | Server-sent events, one per changed row (`{"type": "<table>", "key": …}`): follow a run or the scheduler live instead of polling | |
 | `/badge/{name}/{tag}.svg` | The CI badge | |
 
@@ -55,7 +55,7 @@ response wraps its payload in `data`.
 | `/api/v1/catalog.json`, `/api/v1/catalog/{name}.json` | Full image detail (`data.image`): `kind`, `base`, `config.{ports,volumes,env_vars}`, `tags`, `changelog`, `snippets`, `links` |
 | `/api/v1/catalog/{name}/builds.json` | Build history (`data.builds[]`): `tag`, `branch`, `created`, `test_success`, `platforms[].{arch,result,size}`, `base`, `index_digest` (what an image built on this build records as `base.digest`), links |
 | `/api/v1/catalog/{name}/builds/{tag}/tests.json` | Tests per arch (`data.summary.<arch>`: `passed`, `failed`, `failed_tests`, `startup_seconds`, `listening_ports`, `warnings`) |
-| `…/builds/{tag}/diff.json` | What changed against the previous release, and why the build exists (`data.diff`): `trigger` (push, upstream, packages, rebuild, manual), `reasons` (the sentences on the build page's "Why this built" panel), `classification`, `commit` (the commits between the two releases from GitHub's compare: `commits[].{sha,subject,author,date,url,bot}`, `areas` counting what they touched: `image_yml`, `dockerfile`, `root`, `generated`, `packages`, `other`; only the first three can change the image), `packages`, `dockerfile`, `config`, `upstream`, `base`, `size` |
+| `…/builds/{tag}/diff.json` | What changed against the previous release, and why the build exists (`data.diff`): `trigger` (push, upstream, packages, rebuild, manual; `null` on records made before 2026-10-31), `reasons` (the sentences on the build page's "Why this built" panel), `classification`, `commit` (the commits between the two releases from GitHub's compare: `commits[].{sha,subject,author,date,url,bot}`, `areas` counting what they touched: `image_yml`, `dockerfile`, `root`, `generated`, `packages`, `other`; only the first three can change the image), `packages`, `dockerfile`, `config`, `upstream`, `base`, `size` |
 | `…/builds/{tag}/packages.{arch}.json`, `layers.{arch}.json`, `report.json` | Package table, layers, the full build record |
 | `/api/v1/catalog/{name}/{docs,mods,proxy}.json`, `docker-compose.yml`, `kubernetes.yaml`, `quadlet.container` | Per-image artefacts |
 | `/api/v1/packages.json`, `/api/v1/packages/{package}.json` | Every package across the fleet; one package's `holders[]`: `image`, `tag`, `branch`, `arch`, `version`, `type` |
@@ -104,7 +104,7 @@ and never add it to `main`. Say when it was fetched (`git -C repos/hub/data log 
 ```bash
 D=repos/hub/data
 # Live branches with no upstream release notes source
-for f in $D/images/*/manifest.*.json; do jq -r 'select(.upstream.notes == null) | "\(.name) \(.release.branch)"' "$f"; done
+for f in $D/images/*/manifest.*.json; do jq -r 'select(.upstream.notes == null or .upstream.notes.type == "none") | "\(.name) \(.release.branch)"' "$f"; done
 # Releases in the last 7 days, counted by what triggered them (push, upstream, packages, rebuild, manual)
 jq -r --arg since "$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)" 'select(.created >= $since) | .reason' $D/images/*/builds/*.json 2>/dev/null | sort | uniq -c | sort -rn
 # Version source types across the fleet
@@ -117,6 +117,8 @@ jq -r '.upstream.version.type // "none"' $D/images/*/manifest.*.json | sort | un
   Use `--json` for structured fields.
 - `gh pr view <n> -R linuxserver-playground/<repo> --comments` reads a PR with its report comment.
   For JSON, use `--json comments --jq '.comments[].body'` instead: `--comments` and `--json` cannot be combined.
+  The same holds for issues: `gh issue view <n> --json title,body,comments` is reliable where `--comments`
+  sometimes prints the thread without the body.
   The report comment starts with `<!-- lsio-build-report -->`.
   `gh pr diff` shows the diff, and `gh pr checks` shows the checks.
 - `gh run list -R linuxserver-playground/<repo> --status failure`, then `gh run view <id> --log-failed`.
@@ -160,6 +162,12 @@ curl -fsS $H/catalog/sonarr/builds/<tag>/diff.json | jq '.data.diff | {trigger, 
 
 # Why nothing has been dispatched for an image: the scheduler's newest decisions with their reason
 curl -fsS "$C/scheduler.json?image=sonarr" | jq -r '.decisions[:10][] | "\(.decision.at[:16]) \(.decision.branch) \(.decision.kind): \(.decision.outcome) \(.info.reason // "")"'
+
+# The builds control did dispatch for an image, newest first (two checks an hour bury them in the list above)
+curl -fsS "$C/scheduler.json?image=sonarr&outcome=dispatch" | jq -r '.decisions[:5][] | "\(.decision.at[:16]) \(.decision.branch) \(.decision.kind) → \(.info.dispatch_reason // "?") (\(.info.reason // ""))"'
+
+# Who started a workflow_dispatch run (a person's gh workflow run, or control's App)
+gh api repos/linuxserver-playground/docker-sonarr/actions/runs/<id> --jq '"\(.event) by \(.triggering_actor.login) at \(.run_started_at)"'
 ```
 
 Link the website, not the API, when you show a person a build or an image. The build page is

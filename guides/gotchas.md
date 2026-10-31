@@ -20,8 +20,10 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   compares with the previous release's `package_versions.amd64.txt` asset, publishes nothing and commits the
   table to catch the branch up.
 
-- **A rebuild of the released head republishes the same tag.** A `manual` or `rebuild` run from a commit that
-  is already released (or differs from it only in the pipeline's `[skip ci]` commits) publishes the same `-lsN`
+- **A rebuild of the released head republishes the same tag** (since 2026-10-31 14:00 UTC, workflows `2b3b760`
+  and control `f235f4e`; before that a `[skip ci]` templating commit counted as a new head and minted the next
+  `-lsN`, which is why some tags from before then exist). A `manual` or `rebuild` run from a commit that is
+  already released (or differs from it only in the pipeline's `[skip ci]` commits) publishes the same `-lsN`
   again, and the hub ingests the new record only when its `build.json` is an hour or more newer than the one it
   holds; the site follows on the next `hub-updated`. So a proof build of an unchanged image shows up on the site
   later than the run finishes, and a `packages` run is the only kind that takes the next `-lsN` from the same
@@ -30,7 +32,9 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   is the small build the recipes dispatch. When the change touches the GUI bases, build filezilla (ubuntu,
   selkies, about a minute, no quirks). cura has a memory bug of its own that would muddy any proof. When a chain
   has to be rebuilt by hand, go in order and wait for each release: baseimage-ubuntu, then baseimage-selkies,
-  then the app, so each layer is built on the one just released.
+  then the app, so each layer is built on the one just released. The alpine chain is baseimage-alpine, then
+  baseimage-alpine-nginx, baseimage-selkies' alpine branch and the python tool, then the apps. Nothing in control
+  rebuilds dependents by itself.
 - **Prefer a typed `upstream.version` source to `command`.** `github_release` (with `include`, `exclude`,
   `prerelease`, `sort: version`), `deb_packages`, `alpine_apk`, `arch_package`, `json` (jq, `sort: version`),
   `regex` (a page, or `search: url` for a redirect), `static` and `combined` cover almost every shape a
@@ -102,11 +106,14 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 - **Tell upstream rot and network flakes from pipeline bugs** before fixing anything
   (`repos/workspace/docs/build-failure-triage.md`). Often the cause is an upstream release that is broken or
   not yet published for one architecture.
-- **Rerun once if it looks like the network** (GHCR 5xx, apt or apk mirror timeouts). A second failure is
+- **Rerun once if it looks like the network** (GHCR 5xx, apt or apk mirror timeouts, `curl: (28) Failed to
+  connect` to the project's own download host that answers again minutes later). A second failure is
   real.
 
 ## Mods
 
+- **`./harness get docker-mods` clones `master` only.** `git branch -r` shows no mod; `git ls-remote --heads origin`
+  lists the hundred branches, and `git fetch origin <branch>:<branch>` brings one in ([mod](playbooks/mod.md)).
 - **A contributor cannot create a mod branch from a fork.** A member creates `<target>-<name>` from
   `template`, then the PR goes to that branch.
 - **Mod PRs get less checking than image PRs.** There is no schema validation in CI and no report comment,

@@ -9,7 +9,8 @@
 
 1. **`./harness snapshot`.** Read `.harness/snapshot/latest/control-pulls.json` (with build state) and
    `gh-prs.json` (labels, comment counts, and PRs in repos control does not track, such as this one).
-   Merge the two on repo and number.
+   Merge the two on repo and number. `gh-prs.json` comes from GitHub's search index, which can lag a PR
+   opened minutes ago: when the person has just filed one, `gh pr list -R <repo>` is the authoritative check.
 2. **Leave out the reference PR** ([docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6), never merged) and any `[test data]` fixtures,
    and say what you left out.
 3. **For each PR, collect:**
@@ -39,8 +40,10 @@
 Open PRs, 2026-10-27 14:05 UTC (3 [test data] fixtures left out)
 
 | # | PR | State | Why here | Next |
+| --- | --- | --- | --- | --- |
 | 1 | docker-sonarr#12 Fix … | green, no review, 3 d | fixes red master | review: ./harness review … |
 | 2 | …
 ```
 
-Finish with one line of totals: open, waiting on review, waiting on a maintainer, red.
+Finish with one line of totals: open, waiting on review, waiting on a maintainer, red. When nothing is left
+after the exclusions, say so in one line and point at the red live branches that have no PR instead.

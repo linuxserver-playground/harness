@@ -50,7 +50,8 @@ Some habits make an agent useful:
 - "Add the `ffmpeg` package to the jellyfin image, test it, and draft the PR."
 - "Add a new env var to heimdall that sets the default theme."
 - "Add an image for Mealie." Members get a new repo and a PR. Contributors get a proposal for the labs org.
-- "Make a mod that installs yt-dlp into any image."
+- "Make a mod that installs yt-dlp into any image." Members get a branch and a PR. Contributors get an issue with
+  `mod.yml` drafted, because only a member can create the branch.
 - "Fix the typo on the Kubernetes docs page."
 - "Write a blog post announcing the new build pages, using last month's merged PRs." (members)
 - "Add a `homepage` field to image.yml and show it on the image pages." This is a change train across builder,

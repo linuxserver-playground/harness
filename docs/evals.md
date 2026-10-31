@@ -50,5 +50,11 @@ any test failing. After such a change:
 
 ## Log
 
+Runs made from a fresh clone with a fresh agent per request, as a member (the maintainer's account) and as a
+contributor (a profile with `role: contributor`). Agents started as subagents get no SessionStart hook and no
+guard hook, so requests 16 and 17 (the guard refusing) are not covered by these runs; every agent was told the
+person approves nothing and was barred from filing, pushing or forking.
+
 | Date | Harness | Agent | Requests | Findings |
 | --- | --- | --- | --- | --- |
+| 2026-10-31 | 0.1.0 at 4662e42 | Claude Fable 5.1 | 1, 3, 4, 6, 8, 9, 18, 19, 20, 21 (member: 1, 3, 4, 6, 9, 19, 20, 21; contributor: 8, 18) | 10 of 10 right on classification, live data with fetch times, honest "not run", nothing filed. Both htop requests stopped at the ladder, found `universal-package-install` and proved it in Docker. 21 found `v1` already moved by someone else and did not move it again. 6 found a control bug (every "behind upstream" row was a false positive). Harness defects found and fixed the same day: `lookup` showed a failed run's would-be tag as the release and could not tell a republished tag from a new one; `try` could not pass a mod's variables; `validate workflows` needed a native shellcheck; `get` gave the triage doc no upstream remote; `whoami` trusted a cached profile after the `gh` account changed; consequences said dependents rebuild on a base change (they do not) and counted arch jobs, not runs; fleet-health read `runs.json` `active[]` as flat and `drift` at face value; the reference PR counted as work in `snapshot` and `lookup`; stale lines in member.md, start-here, local-testing; the workspace's shebang recipe and triage grep |
