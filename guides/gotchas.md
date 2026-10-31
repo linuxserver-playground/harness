@@ -14,8 +14,11 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   creating a repo, and dispatch the live branches that got no run.
 - **Neither bot commit starts a build.** `Update generated files [skip ci]` is made before the build that
   continues on it; `Update package versions [skip ci]` after a successful release. The weekly package check
-  releases from its own run when the table changed; there is no second build, and control's release check
-  treats a head that differs from the released commit only in those files as released.
+  releases from its own run when a package changed since the previous release; there is no second build, and
+  control's release check treats a head that differs from the released commit only in those files as released.
+  A committed table another pipeline wrote (Jenkins', on a converted repository) is not a change: the check
+  compares with the previous release's `package_versions.amd64.txt` asset, publishes nothing and commits the
+  table to catch the branch up.
 
 - **A rebuild of the released head republishes the same tag.** A `manual` or `rebuild` run from a commit that
   is already released (or differs from it only in the pipeline's `[skip ci]` commits) publishes the same `-lsN`
