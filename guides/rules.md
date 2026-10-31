@@ -23,8 +23,8 @@ They hold in every repo and on both paths. A repo's own `AGENTS.md` adds to them
 - **No trailers of any kind.** That includes `Co-Authored-By` lines for AI tools and `Signed-off-by`. The
   harness turns Claude Code's attribution off; other agents must leave it out themselves.
 - One focused change per PR, with the smallest diff that does it. No drive-by refactors or rewording.
-- Bot commits (`Update generated files [skip ci]`, `Update package versions`) are the pipeline's. Never
-  write one by hand.
+- Bot commits (`Update generated files [skip ci]`, `Update package versions [skip ci]`) are the pipeline's.
+  Never write one by hand.
 
 ## Pull requests
 

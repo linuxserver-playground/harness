@@ -76,7 +76,8 @@ Control replaces every per-repo cron:
   `deb_repo`, `command` included (control runs it as nobody in a sandbox, `control/sandbox.py`). Prefer a typed
   source; `command` is for what none of them can say;
 - hourly release checks;
-- weekly package checks (`Update package versions` commits, which deliberately do start a build).
+- weekly package checks: one build that compares the package table first and releases only on a change
+  (every live release then commits `Update package versions [skip ci]`, which starts nothing).
 - hourly mod checks, for the docker-mods branches whose `mod.yml` has an `upstream` block (the Jenkins
   External-Triggers jobs): the same resolver, then GHCR is asked whether `mods:<branch>-<version>` exists; when
   it does not, the branch's `build.yml` is dispatched with `mod_version` (and `line` for a mod with

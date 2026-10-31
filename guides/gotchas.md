@@ -12,8 +12,10 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 - **Every push to an open PR starts a full build and test.** Finish the change locally, then push once.
 - **GitHub runs a workflow for only one of a brand-new repo's first pushes.** Check `gh run list` after
   creating a repo, and dispatch the live branches that got no run.
-- **`Update package versions` commits deliberately start a build**: that push is what releases new packages.
-  `Update generated files [skip ci]` deliberately does not.
+- **Neither bot commit starts a build.** `Update generated files [skip ci]` is made before the build that
+  continues on it; `Update package versions [skip ci]` after a successful release. The weekly package check
+  releases from its own run when the table changed; there is no second build, and control's release check
+  treats a head that differs from the released commit only in those files as released.
 
 - **Prefer a typed `upstream.version` source to `command`.** `github_release` (with `include`, `exclude`,
   `prerelease`, `sort: version`), `deb_packages`, `alpine_apk`, `arch_package`, `json` (jq, `sort: version`),
