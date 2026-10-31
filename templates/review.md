@@ -1,6 +1,8 @@
 **Verdict:** TODO (approve | comment | request changes): one sentence why.
 
-**Tested locally:** TODO (./harness validate results; ran the image: what was exercised; compared with the released tag). Say "not run" with the reason for anything skipped.
+**Tested locally:** TODO (./harness validate results; ran the image: what was exercised). Say "not run" with the reason for anything skipped.
+
+**Compared with the released tag:** TODO (which tag, run on the same `.harness/try/<name>/` data; the package differences from `apk info -v` or `dpkg -l` in both; startup and the web endpoint in both). Or "not compared" with the reason.
 
 **Blocking**
 

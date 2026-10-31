@@ -56,4 +56,5 @@ Front matter is validated at build time (`src/content.config.ts`). When a page m
 ## Contributors
 
 Docs PRs are welcome for fixing wrong or unclear pages, and for adding a page to an existing section. A new
-section, layout changes and blog posts go in an issue on `site` describing what you would like.
+section, layout changes and blog posts go in an issue on `site` describing what you would like:
+`./harness draft request site` fills the request template (not the bug one).

@@ -49,7 +49,8 @@ Some habits make an agent useful:
 
 - "Add the `ffmpeg` package to the jellyfin image, test it, and draft the PR."
 - "Add a new env var to heimdall that sets the default theme."
-- "Add an image for Mealie." Members get a new repo and a PR. Contributors get a proposal for the labs org.
+- "Add an image for Mealie." Members get a new repo and a PR. Contributors get a proposal, filed as an issue on
+  `harness` until the labs org exists.
 - "Make a mod that installs yt-dlp into any image." Members get a branch and a PR. Contributors get an issue with
   `mod.yml` drafted, because only a member can create the branch.
 - "Fix the typo on the Kubernetes docs page."

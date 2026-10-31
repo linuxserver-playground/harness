@@ -34,7 +34,7 @@ The harness asks GitHub whether you belong to `linuxserver-playground`, and give
 | --- | --- | --- |
 | Understand the org: PRs, issues, builds, fleet, data | yes | yes |
 | Fix an image, a mod, docs or infrastructure | a branch and a pull request | a fork and a pull request |
-| New images | create the repo, then a pull request for review | a proposal to `linuxserver-playground-labs` |
+| New images | create the repo, then a pull request for review | a proposal (an issue on `harness` until the labs org exists) |
 | Blog posts | yes | no |
 | Fleet operations: rerun, dispatch, skip, release, remove | yes | ask a maintainer |
 | Reviews, labels and triage | posted by you | read-only |
@@ -46,9 +46,9 @@ Either way, a person reads and files every issue, PR and review. The agent draft
 | Path | What |
 | --- | --- |
 | `AGENTS.md` | Where the agent starts: role, request table, rules. `CLAUDE.md` imports it. |
-| `harness` | The CLI: `whoami`, `doctor`, `core`/`get`/`sync`/`fork`/`setup`, `snapshot`, `lookup`, `data`, `try`, `render`, `validate`, `draft`, `allow`. `./harness help` lists them. |
+| `harness` | The CLI: `whoami`, `doctor`, `core`/`get`/`sync`/`fork`/`setup`, `snapshot`, `lookup`, `data`, `try`, `render`, `validate`, `draft` (pr, issue, request, review, proposal), `allow`. `./harness help` lists them. |
 | `guides/` | The system map, data sources, rules, local testing, gotchas, role guides and one playbook per kind of request. |
-| `templates/` | Pull request, issue, review, triage, image proposal and change-train templates. |
+| `templates/` | Pull request, bug issue, request (a feature, topic or removal), review, triage, image proposal and change-train templates. |
 | `.claude/` | Settings (a read-only allowlist, commit attribution off), the SessionStart and guard hooks, one skill per playbook. |
 | `docs/evals.md` | Requests to try after changing a guide or hook, with what a good answer looks like. |
 | `repos/` | Your clones of the org's repos (gitignored). |

@@ -53,6 +53,10 @@ keep their old record. The hub can recompute from assets when needed.
 
 ## Steps
 
+0. **Check that no field already means this.** Read `repos/builder/schemas/image.schema.json` and the
+   manifest page (`/docs/maintain/image-manifest/`): `upstream.url` is the project's website, `upstream.sponsor`
+   its donation pages, `upstream.notes` its release notes. When a field exists, the request is a site change
+   (show it) or nothing at all, and there is no train. Say so and ask before drafting anything.
 1. **Run [consequences](consequences.md)** for the whole change. Name every repo and the order.
 2. **Open the tracking issue** from the template: the goal, the ordered steps (repo, what, why it must come
    before the next), the `contracts_version` decision, how to verify the end state, and the rollback.

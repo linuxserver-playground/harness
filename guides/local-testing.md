@@ -31,7 +31,10 @@ Once it is running:
 - `docker exec -it harness-try-<name> bash`;
 - open the printed URL and click through what the change touched.
 
-To test a restart against an existing `/config`, run `try` again: the volume directory stays.
+To test a restart against an existing `/config`, run `try` again: the volume directory stays. Every run of
+an image uses the one container name `harness-try-<name>`, so to run the released image after your build (or
+the PR image after the released one) stop the first with `./harness try --stop <name>`; the data directory is
+shared, which is what a comparison wants.
 
 ## Compare two builds
 

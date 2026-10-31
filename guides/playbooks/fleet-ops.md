@@ -73,7 +73,8 @@ The change is merged to `workflows` main by PR first ([infra-change](infra-chang
 ## Remove an image
 
 1. **Check that nothing depends on it:**
-   - no image builds FROM it (`./harness lookup <name>`, "built FROM it");
+   - no image builds FROM it (`./harness lookup <name>`: a "built FROM" line per base tag; no line means no
+     dependents);
    - no open PRs;
    - no mods target it (`/api/v1/catalog/<name>/mods.json`).
 2. **Consider archiving instead.** An archived repo stays on the site with an `archived` flag. The question

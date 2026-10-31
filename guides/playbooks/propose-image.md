@@ -8,16 +8,19 @@
 **Output:** a proposal in the labs org, filled in from real data. Optionally, a working scaffold in the
 person's own GitHub account to go with it.
 
-> **Labs is not settled yet.** The playground uses `linuxserver-playground-labs` as a stand-in, and the move to
-> the real org will change the layout (`repos/workspace/docs/live-cutover.md`). Who reviews proposals, how labs
-> images build, and what graduation means are still open. Until a maintainer updates this playbook, stop at
-> step 4 and tell the person their proposal will be picked up by the team.
+> **Labs is not settled yet, and the labs org does not exist today.** `linuxserver-playground-labs` is the
+> stand-in name, and the move to the real org will change the layout (`repos/workspace/docs/live-cutover.md`).
+> Until it exists, a proposal is an issue on `linuxserver-playground/harness` titled `Proposal: <name>`
+> (`./harness draft proposal <name>` fills the template and prints the command). Who reviews proposals, how
+> labs images build, and what graduation means are still open: stop at step 4 and tell the person their
+> proposal will be picked up by the team.
 
 ## Steps
 
 1. **Check that it does not exist:**
-   - the hub's image list, `gh repo list linuxserver-playground-labs`;
-   - open proposals: `gh issue list -R linuxserver-playground-labs/proposals --search "<name>"`;
+   - the hub's image list (`curl -fsS https://linuxserver-playground.github.io/hub/api/v1/images.json | jq -r '.data.repositories.linuxserver[].name' | grep -i <name>`);
+   - open proposals: `gh issue list -R linuxserver-playground/harness --search "Proposal: <name>"` (and the labs
+     org, when it exists);
    - LinuxServer's own fleet (`linuxserver/docker-<name>`, read-only).
 
    If it exists in some form, help the person comment there instead.
@@ -27,13 +30,15 @@ person's own GitHub account to go with it.
    - release cadence and a machine-readable version source (GitHub releases, a package index, a JSON API);
    - amd64 and arm64 support;
    - whether it needs a GUI (selkies or kasmvnc bases) or a database;
-   - whether an official image already exists, and why ours would be better.
-3. **Fill the proposal:** [templates/proposal-image.md](../../templates/proposal-image.md). Use facts with
+   - whether upstream publishes its own image (its Dockerfile, compose file and registry), and what ours adds:
+     s6, PUID/PGID, both architectures, the docs and store templates, a version check. This is the first
+     question the team asks; answer it in the proposal.
+3. **Fill the proposal:** `./harness draft proposal <name>` writes
+   [templates/proposal-image.md](../../templates/proposal-image.md) to `.harness/drafts/`. Use facts with
    links, not enthusiasm. Name the model image (the existing image most like it) and the base.
-4. **File it.** Show the draft, then on approval:
-   `gh issue create -R linuxserver-playground-labs/proposals --title "Proposal: <name>" --body-file <draft>`.
-   If the labs org or its `proposals` repo does not exist yet, file it on
-   `linuxserver-playground/harness` instead, with the title prefix `Proposal:`, and say so.
+4. **File it.** Show the draft, then on approval run the command at its foot:
+   `gh issue create -R linuxserver-playground/harness --title "Proposal: <name>" --body-file <draft>`. When the
+   labs org and its `proposals` repo exist, they take over, and this playbook changes.
 5. **Optional: a scaffold in the person's own account.** Some people want to show it working:
    - create a repo there (`gh repo create docker-<name> --public` creates it under their account; the guard
      hook only stops org repos);

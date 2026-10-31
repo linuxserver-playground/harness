@@ -23,7 +23,10 @@ they read it, the label and comment calls go one by one, each approved.
    Issues in the first three are not ours to fix. Say so, and draft the polite closing comment.
 4. **Measure the blast radius with data, not adjectives:**
    - **One image or many?** `./harness lookup <image>`. For a base image, the "built FROM it" list. For a
-     package, `/api/v1/packages/<pkg>.json`.
+     package, `/api/v1/packages/<pkg>.json`. For an issue on an infrastructure repo or the workspace (the
+     pipeline, the hub, the site, control, a batch project), the blast radius is which builds, pages or users
+     the change reaches: count them from the snapshot and the data checkout, and say "none today" for a design
+     note.
    - **Live or not?** Is the affected branch live, and is it red right now (`control-fleet.json`)?
    - **Who notices?** Every user on start-up, users of one feature, or only the team (pipeline, site).
    - **A regression?** Compare the build where it started with the one before (`diff.json`, changelog).

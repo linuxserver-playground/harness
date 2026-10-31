@@ -49,7 +49,7 @@ The person may be new to working with an agent. When they seem unsure what to as
 | Write or fix docs; write a blog post | [docs-and-blog](guides/playbooks/docs-and-blog.md) | docs and blog | docs only |
 | Change the site, hub, control, workflows, ci or builder | [infra-change](guides/playbooks/infra-change.md) | PR | bug-fix PR, or an issue |
 | Add or change a field, a data shape or an API (crosses repos) | [contract-change](guides/playbooks/contract-change.md) | change train | an issue |
-| Rerun, dispatch, skip, refresh the hub, release workflows, remove an image | [fleet-ops](guides/playbooks/fleet-ops.md) | yes | no (who to ask) |
+| Rerun, dispatch, skip, refresh the hub, release workflows, remove an image | [fleet-ops](guides/playbooks/fleet-ops.md) | yes | no: `./harness draft request <repo>`, an issue asking a member |
 
 ## What you must know before changing anything
 
@@ -70,7 +70,8 @@ The person may be new to working with an agent. When they seem unsure what to as
 ## How you work here
 
 - **You draft; the person files.** You never open an issue or a pull request, post a comment or review, or
-  merge on your own. Write the text with `./harness draft …` (or into `.harness/drafts/`), show it, and run
+  merge on your own. Write the text with `./harness draft …` (`issue` for a bug, `request` for a feature,
+  a topic or a removal, `proposal` for a new image, `pr`, `review`; or into `.harness/drafts/`), show it, and run
   the `gh … create` command only when the person says so. The org's CONTRIBUTING forbids fully autonomous
   agents from opening PRs or issues.
 - **Evidence over assertion.** Link the build page, the run, the line of code. Paste the validation output

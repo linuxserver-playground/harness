@@ -18,8 +18,9 @@
 #                                            (--env adds variables: DOCKER_MODS=… to try a mod on the image)
 #   ./harness render <repo> [--in-place]     builder check, then render the generated files (out of tree by default)
 #   ./harness validate <repo> [--no-build]   the repo's own validation list; results go to .harness/validation/
-#   ./harness draft pr|issue|review <repo> [number]
+#   ./harness draft pr|issue|request|review|proposal <repo-or-name> [number]
 #                                            fill a template into .harness/drafts/ for you to read before anything is filed
+#                                            (issue: a bug; request: a feature, topic or removal; proposal: a new image)
 #   ./harness allow push|force-push|tag|delete <repo> [minutes]
 #                                            members: let the guard hook pass one protected action for a while (default 30 min)
 #
@@ -392,7 +393,7 @@ cmd_lookup() {
   name=$(image_name "$1")
   tmp=$state/lookup/$name
   mkdir -p "$tmp"
-  fetch "$HUB/api/v1/catalog/$name.json" >"$tmp/catalog.json" || die "the hub has no image '$name' (check $HUB/api/v1/images.json)"
+  fetch "$HUB/api/v1/catalog/$name.json" >"$tmp/catalog.json" 2>/dev/null || die "the hub has no image '$name': lookup is for images (check $HUB/api/v1/images.json); for an infrastructure repo use gh and the snapshot"
   fetch "$HUB/api/v1/catalog/$name/builds.json" >"$tmp/builds.json" || echo '{"data":{"builds":[]}}' >"$tmp/builds.json"
   fetch "$CONTROL/api/images/$name.json" >"$tmp/control.json" || echo '{}' >"$tmp/control.json"
   fetch "$HUB/api/v1/fleet/bases.json" >"$tmp/bases.json" || echo '{"data":{"bases":[]}}' >"$tmp/bases.json"
@@ -787,12 +788,22 @@ validate_mod() {
 
 cmd_draft() {
   local kind=${1:-} repo dir out login role
-  [[ "$kind" =~ ^(pr|issue|review)$ ]] || die "usage: ./harness draft pr|issue|review <repo> [number]"
-  repo=$(resolve_repo "${2:?usage: ./harness draft $kind <repo>}")
-  dir=$(repo_dir "$repo")
+  [[ "$kind" =~ ^(pr|issue|request|review|proposal)$ ]] || die "usage: ./harness draft pr|issue|request|review|proposal <repo-or-name> [number]"
   login=$(jq -r '.login // ""' "$profile" 2>/dev/null || echo "")
   role=$(role)
   mkdir -p "$state/drafts"
+  if [[ "$kind" == proposal ]]; then
+    # A new image proposal: the labs org does not exist yet, so it is filed as an issue on harness.
+    local name=${2:?usage: ./harness draft proposal <name>}
+    name=$(image_name "$name")
+    out=$state/drafts/proposal-$name.md
+    sed -e "s|TODO <name>|$name|" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" "$here/templates/proposal-image.md" >"$out"
+    say "<!-- file it with: gh issue create -R $ORG/harness --title \"Proposal: $name\" --body-file $out  (the labs org, $LABS_ORG, does not exist yet) -->" >>"$out"
+    say "draft: ${out#"$here"/}"
+    return
+  fi
+  repo=$(resolve_repo "${2:?usage: ./harness draft $kind <repo>}")
+  dir=$(repo_dir "$repo")
   case "$kind" in
     pr)
       [[ -e "$dir/.git" ]] || die "$repo is not cloned"
@@ -835,6 +846,12 @@ cmd_draft() {
       sed -e "s|{{repo}}|$repo|g" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" "$here/templates/issue.md" >"$out"
       say "<!-- file it with: gh issue create -R $ORG/$repo --title \"<what is wrong, in a sentence>\" --body-file $out -->" >>"$out"
       ;;
+    request)
+      # Not a bug: a feature, a blog topic, a removal, anything a contributor asks a member to do.
+      out=$state/drafts/request-$repo-$(date +%Y%m%d%H%M%S).md
+      sed -e "s|{{repo}}|$repo|g" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" "$here/templates/request.md" >"$out"
+      say "<!-- file it with: gh issue create -R $ORG/$repo --title \"<what you are asking for, in a sentence>\" --body-file $out -->" >>"$out"
+      ;;
     review)
       local number=${3:?usage: ./harness draft review <repo> <number>}
       out=$state/drafts/review-$repo-$number.md
@@ -861,7 +878,7 @@ cmd_allow() {
 
 # ---------------------------------------------------------------------------------------------------- main
 
-usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd=${1:-help}
