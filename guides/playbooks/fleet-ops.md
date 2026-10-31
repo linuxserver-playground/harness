@@ -25,6 +25,13 @@ are about to do and get a yes first.
 Then dispatch in batches of about 10, waiting for the queue to drain, and keep heavy images apart (webtop,
 selkies and kasmvnc bases). The limit is 20 concurrent jobs for the whole org.
 
+**Rebuilding a chain** (a base and what builds on it) goes in order, waiting for each release: baseimage-ubuntu,
+then baseimage-selkies, then the app, so each layer is built on the one just released. A rebuild of an unchanged
+head republishes the same `-lsN`, and the hub and site show it after their next runs (gotchas).
+
+**Proof builds.** heimdall is the small build for a pipeline change. When the change touches the GUI bases
+(selkies, kasmvnc, the Ubuntu base), build filezilla as well. Never cura.
+
 ## Refresh the hub
 
 Control already dispatches this hourly, so force one only when fresh data is needed now.
@@ -41,10 +48,16 @@ The change is merged to `workflows` main by PR first ([infra-change](infra-chang
 1. In `repos/workflows` on main: run `./scripts/check.sh` and stop on any failure.
 2. Confirm it is backward compatible for every `@v1` caller: the same inputs, outputs and ci interface. If it
    is not, stop: it needs a new major tag.
-3. The person approves the tag move: `./harness allow tag workflows`. Then
+3. If the change needs a new builder or ci image too (a step calls a new builder command, or names a file an
+   older builder does not render), that repo has merged and its package's `latest` tag is the new commit:
+   `gh api orgs/linuxserver-playground/packages/container/builder/versions --jq '.[] | select(.metadata.container.tags | index("latest")) | .metadata.container.tags'`
+   lists builder's main sha. Publish succeeding is a minute too early (gotchas, "Releasing builder, ci and
+   workflows").
+4. The person approves the tag move: `./harness allow tag workflows`. Then
    `git -C repos/workflows tag -f v1 && git -C repos/workflows push -f origin v1`.
-4. Prove it: `gh workflow run build.yml -R linuxserver-playground/docker-heimdall`, then watch it to the end.
-5. If the build fails because of the change, move `v1` back to the previous commit (same approval) or fix
+5. Prove it: `gh workflow run build.yml -R linuxserver-playground/docker-heimdall`, then watch it to the end.
+   When the change touches the GUI path, also `… -R linuxserver-playground/docker-filezilla`. Never cura.
+6. If the build fails because of the change, move `v1` back to the previous commit (same approval) or fix
    forward. Say which you did.
 
 ## Remove an image

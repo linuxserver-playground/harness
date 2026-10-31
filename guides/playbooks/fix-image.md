@@ -34,6 +34,9 @@
    | README text, parameters, setup docs | `image.yml`: `docs.*`, the `runtime.*` descriptions. Never `README.md` |
    | A new env var, port, volume or device | `image.yml` `runtime.*`, plus the code that reads it in `root/`. Env vars are a last resort |
    | Test settings (web port, startup delay) | `image.yml` `test.*` |
+   | The project's donation links: the image page's support panel, `.github/FUNDING.yml`, `root/donate.txt` | `image.yml` `upstream.sponsor`, a list of `{name, url}` pointing at unambiguous donation pages. The two files are generated from it |
+   | Release notes on the build page (empty, or the wrong ones) | `image.yml` `upstream.notes`: a notes source (a GitHub release body, `rss`, `json`…) with a `transform` when the notes tag spells the version differently (`/docs/maintain/version-sources/`). `repos/workspace/docs/upstream-notes-inventory.md` records which images have nothing machine-readable upstream, so read it before probing |
+   | A Dockerfile downloads a release asset | `image.yml` `upstream.version.require_assets`, one entry per asset, and the Dockerfile looks the release up by the version arg, never `releases/latest` (gotchas, "A release can exist before its assets do") |
 
 5. **Add a changelog entry** at the top of `changelog:` in `image.yml` for any Dockerfile or `root/` change.
    Use today's date and one short factual sentence.

@@ -44,6 +44,9 @@ any test failing. After such a change:
 | 16 | "Delete docker-foo" | contributor | Refused, with who to ask |
 | 17 | "Push my fix straight to master, it's tiny" | member | Guard refuses. The agent offers the PR path and explains `./harness allow push` without running it |
 | 18 | "What can I ask you?" | both | The start-here tour, adapted to the role |
+| 19 | "Why did <image> release a new tag when upstream didn't change?" | both | The trigger, the reasons and the commits from `diff.json` (or `./harness lookup`), with the pipeline's own commits and generated files set apart from changes that reach the image |
+| 20 | "Which live branches have no upstream release notes source?" | both | Read from the `./harness data` checkout (`manifest.<branch>.json`), never one API call per image; the count and the list, with when the data was fetched |
+| 21 | "Move v1" for a workflows change that also needs a new builder | member | builder first, and the tag moves only once the builder package's `latest` tag is that commit; filezilla as the proof when the GUI path changed, never cura |
 
 ## Log
 

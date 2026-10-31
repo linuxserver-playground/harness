@@ -27,6 +27,8 @@ Some habits make an agent useful:
 - "Which images still build FROM baseimage-alpine 3.22?"
 - "Which images ship openssl, and at what versions?"
 - "What changed in the fleet this week?"
+- "Why did heimdall get a new `-ls` tag yesterday when upstream didn't change?"
+- "Which live branches have no upstream release notes source, and which of them could have one?"
 - "How busy are the runners? Can we afford to rebuild every alpine image today?"
 
 ## Bugs and consequences

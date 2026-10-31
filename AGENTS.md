@@ -78,7 +78,13 @@ The person may be new to working with an agent. When they seem unsure what to as
   (`./harness try`) before you say a change works.
 - **Read live data, not memory.** The fleet changes every hour. Use `./harness snapshot` and
   `./harness lookup`, or the APIs in [guides/data-sources.md](guides/data-sources.md), and say when the data
-  was fetched.
+  was fetched. A question about the whole fleet reads the hub's data checkout (`./harness data`), never
+  hundreds of Pages requests.
+- **Say what you will touch before you touch it.** When a change fans out across repos, open with the repos
+  and the kinds of files (code, tests, a schema, CONVENTIONS, an infrastructure repo's README, these guides)
+  and what each is for. Edits that appear without a reason, to READMEs most of all, get the work stopped. The
+  READMEs of control, workflows and the hub are their operator references and their `AGENTS.md` ask for them to
+  be kept true; an image repo's README is generated and is never touched.
 - **The hooks are a steer.** The guard hook stops commands that are wrong for the person's role, such as a
   contributor pushing to the org, or anyone pushing straight to a live branch. When it stops you, read its
   reason and take the path it names. Do not look for a way around it. `./harness allow` exists for the

@@ -17,6 +17,17 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   releases from its own run when the table changed; there is no second build, and control's release check
   treats a head that differs from the released commit only in those files as released.
 
+- **A rebuild of the released head republishes the same tag.** A `manual` or `rebuild` run from a commit that
+  is already released (or differs from it only in the pipeline's `[skip ci]` commits) publishes the same `-lsN`
+  again, and the hub ingests the new record only when its `build.json` is an hour or more newer than the one it
+  holds; the site follows on the next `hub-updated`. So a proof build of an unchanged image shows up on the site
+  later than the run finishes, and a `packages` run is the only kind that takes the next `-lsN` from the same
+  head.
+- **Proof builds: heimdall, or filezilla for anything on the selkies path. Never cura.** heimdall (alpine-nginx)
+  is the small build the recipes dispatch. When the change touches the GUI bases, build filezilla (ubuntu,
+  selkies, about a minute, no quirks). cura has a memory bug of its own that would muddy any proof. When a chain
+  has to be rebuilt by hand, go in order and wait for each release: baseimage-ubuntu, then baseimage-selkies,
+  then the app, so each layer is built on the one just released.
 - **Prefer a typed `upstream.version` source to `command`.** `github_release` (with `include`, `exclude`,
   `prerelease`, `sort: version`), `deb_packages`, `alpine_apk`, `arch_package`, `json` (jq, `sort: version`),
   `regex` (a page, or `search: url` for a redirect), `static` and `combined` cover almost every shape a
@@ -28,10 +39,23 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   "assets not ready" and tries again hourly, and posts to Discord on every such check (amber, then red from
   the fifth) with the pattern and the names that were uploaded, so a renamed asset is read off the embed. A Dockerfile that
   reads `releases/latest` for its assets should look the release up by the version arg instead, so the check
-  and the build see the same release.
+  and the build see the same release. `{asset, repo}` checks a sibling repository's latest release, for an
+  architecture built from one. Every branch's patterns, and the branches left without one on purpose (static
+  versions, names that cannot be derived from the version), are listed in `repos/workspace/docs/live-cutover.md`,
+  "Required release assets": read it before adding or removing one.
 - **Count builds from GHCR, not Releases.** A release's `created_at` (and GraphQL's `createdAt`) is the date of
   the tagged commit, and an upstream-triggered release tags an old head, so date filters on Releases miss them.
   GHCR package versions carry the push time.
+
+## Releasing builder, ci and workflows
+
+- **Move `v1` only once the builder package carries the new builder.** When a workflows change needs a new
+  builder too (a step calls a new builder command, or names a generated file an older builder does not render),
+  builder merges first, and `v1` moves only when the `builder` package's `latest` tag is the new commit:
+  `gh api orgs/linuxserver-playground/packages/container/builder/versions --jq '.[] | select(.metadata.container.tags | index("latest")) | .metadata.container.tags'`
+  must list builder's main sha. Publish reporting success is not that moment: the retag lands about a minute
+  later, and a build that starts in between pulls the old builder with the new workflow and fails its Prepare job
+  (docker-modrinth, 2026-10-30). The same holds for a `ci` change a workflow depends on.
 
 ## Issues and pull requests
 
@@ -102,6 +126,9 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   change needs no refresh, and a hub change is tested with `npm run data:local` against a local `../hub` build.
   GitHub Pages rate-limits by IP: an agent that ran two full refreshes (`REFRESH_ALL=1 npm run data`) was
   answered 429 for every hub URL, including `catalog.json`, for over half an hour.
+- **A fleet-wide question reads the hub's `data` checkout, not the API.** `./harness data` lays the whole
+  dataset into `repos/hub/data/` (data-sources, "The whole dataset at once"). An agent that answered "which
+  images…" with one Pages request per image hit the same rate limit as the refresh above.
 - **Generated data is not on main in the hub or the site.** Each keeps it as the one commit of a `data` branch,
   replaced by CI on every change so its history never grows. The hub's `data/` is a checkout of that branch
   (`scripts/data.sh`); the site's snapshots are laid over the checkout by `npm run snapshot`. Both paths are

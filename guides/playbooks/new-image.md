@@ -73,7 +73,14 @@ request per live branch carrying the whole image, for the team to review. Mergin
      - categories on non-default branches;
      - `# shellcheck shell=bash` headers;
      - `#!/usr/bin/with-contenv bash` shebangs;
-     - executable bits.
+     - executable bits;
+     - `require_assets` under `upstream.version` when the Dockerfiles download a release asset, one entry per
+       asset (`{asset: <regex>}` on the file name for GitHub, Codeberg and Gitea releases, a `${VERSION}` URL
+       template elsewhere), so control waits for the upload instead of building against an empty release; a
+       Dockerfile that read `releases/latest` now looks the release up by the version arg;
+     - `upstream.notes` and `upstream.sponsor` when upstream publishes release notes and a donation page
+       (`repos/workspace/docs/upstream-notes-inventory.md` and `docs/donation-links.md` record what the fleet
+       found for the images converted so far).
    - Build on the playground's own base images (`FROM ghcr.io/linuxserver-playground/baseimage-*`). Add a
      row to `repos/workspace/docs/playground-references.md` for every rewrite.
    - **Leave `README.md` and `AGENTS.md` alone in this PR.** The default branch's placeholder stays until the

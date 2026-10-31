@@ -25,12 +25,23 @@
       change. Compare the timing with `git log` in those repos and the `v1` tag date.
    5. **The image itself?** A Dockerfile or `root/` change, or a new upstream version that needs a new
       dependency.
-3. **For a bug report,** reproduce it where you can: `./harness try <image> <tag>`, then follow the reported
+3. **For "why did this build happen"** (a new `-lsN` when upstream did not change, a tag nobody pushed for):
+   the build page's "Why this built" panel says it, and `diff.json` holds the same data (data-sources):
+   `trigger` (push, upstream, packages, rebuild, manual), `reasons`, `base` and `packages`, and `commit`, the
+   commits between this release and the last with `bot` and `areas`. Only `image.yml`, the Dockerfiles and
+   `root/` can change the image; generated files and the package table never do, so a range made of the
+   pipeline's own commits is a base or package refresh, not a LinuxServer change. Package changes that came with
+   the base belong to the base builds in between. `./harness lookup <image>` prints the line for the newest
+   release, and the scheduler's newest decisions say why a build did or did not go out (`info.reason`:
+   cooldown, assets not ready, a skip flag).
+4. **For a bug report,** reproduce it where you can: `./harness try <image> <tag>`, then follow the reported
    steps. Try the previous tag too, to see whether it is a regression. Read the code paths in the cloned
    repos (`root/etc/s6-overlay/s6-rc.d/*/run`, the Dockerfile, init scripts).
-4. **For a PR,** read the diff and the report comment. Explain the change in terms of behaviour: what a user
+5. **For a PR,** read the diff and the report comment. Explain the change in terms of behaviour: what a user
    of the image (or of the site, or hub) will see differently.
-5. **For "how does X work",** use [system-map](../system-map.md) and the code, and cite the files.
+6. **For "how does X work",** use [system-map](../system-map.md) and the code, and cite the files. For a
+   question across the fleet ("which images…", "how many branches…"), read the hub's data checkout
+   (`./harness data`), not one API call per image.
 
 ## Answer shape
 
