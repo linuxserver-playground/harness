@@ -11,7 +11,8 @@
 #   ./harness fork <repo>                    contributors: fork a cloned repo and make the fork origin
 #   ./harness setup <repo>                   install one repo's dev environment (venv, npm, cargo)
 #   ./harness snapshot                       one consistent picture of the org from control, the hub and GitHub
-#   ./harness lookup <image>                 one image at a glance: branches, builds, tests, PRs, issues, dependents
+#   ./harness lookup <image>                 one image at a glance: branches, builds, tests, PRs, issues, dependents, why the newest build exists
+#   ./harness data                           check out the hub's data branch into repos/hub/data: the whole fleet in one clone, for fleet-wide questions
 #   ./harness try <image> [tag] | --build <repo> | --stop [image]
 #                                            run a published or locally built image in Docker and wait for init
 #   ./harness render <repo> [--in-place]     builder check, then render the generated files (out of tree by default)
@@ -388,9 +389,21 @@ cmd_lookup() {
     "  upstream: \(.project_url // "?") at \(.upstream_version // "?"); base \(.base // "?"); arches \(.architectures // [] | map(.arch? // .) | join(", "))",
     "  tags:     \(.tags // [] | map(.tag) | join(", "))"' "$tmp/catalog.json"
   say "  live branches (control):"
-  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built") \(.version_tag // "")\(if .drift == "ahead" then " (upstream moved to \(.upstream))" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), built \(.built_at // "?")"' "$tmp/control.json"
+  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built") \(.version_tag // "")\(if .drift == "ahead" then " (upstream moved to \(.upstream))" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), built \(.built_at // "?"), next check \(.next_check // "?")"' "$tmp/control.json"
+  # The newest scheduler decision per branch and kind says why nothing was dispatched (cooldown, assets not ready,
+  # a skip flag, "os image: builds on the package check") or that a build went out.
+  fetch "$CONTROL/api/scheduler.json?image=$name" >"$tmp/scheduler.json" || echo '{"decisions":[]}' >"$tmp/scheduler.json"
+  say "  scheduler (newest decision per branch and check):"
+  jq -r '[.decisions[] | .decision + {reason: (.info.reason // "")}] | group_by([.branch, .kind]) | map(max_by(.at)) | sort_by(.branch, .kind)[]
+    | "    \(.branch) \(.kind): \(.outcome)\(if .reason != "" then " (\(.reason))" else "" end) at \(.at[:16])"' "$tmp/scheduler.json"
   say "  recent releases (hub):"
   jq -r --arg site "$SITE" --arg name "$name" '.data.builds[:5][] | "    \(.tag) \(.branch) \(.created) tests \(if .test_success then "passed" else "FAILED" end) \(.platforms | map("\(.arch)=\(.result)") | join(" "))  \($site)/images/\($name)/builds/\(.tag)/"' "$tmp/builds.json"
+  # Why the newest release exists: the build page's "Why this built" panel comes from the same diff.
+  local newest
+  newest=$(jq -r '.data.builds[0].tag // ""' "$tmp/builds.json")
+  if [[ -n "$newest" ]] && fetch "$HUB/api/v1/catalog/$name/builds/$newest/diff.json" >"$tmp/diff.json" 2>/dev/null; then
+    jq -r '.data.diff | "  why \(.tag) built: trigger \(.trigger // "?"); \(.reasons // [] | join("; "))\(if (.commit.commits // []) | length > 0 then "; commits: " + ((.commit.commits | map("\(.sha[:7]) \(.subject)\(if .bot then " (bot)" else "" end)")) | join(", ")) else "" end)"' "$tmp/diff.json"
+  fi
   fetch "$CONTROL/api/pulls.json" >"$tmp/pulls.json" || echo '{"pulls":[]}' >"$tmp/pulls.json"
   fetch "$CONTROL/api/issues.json" >"$tmp/issues.json" || echo '{"issues":[]}' >"$tmp/issues.json"
   jq -r --arg repo "$ORG/docker-$name" '[.pulls[] | select(.pull.repo == $repo)] |
@@ -401,6 +414,22 @@ cmd_lookup() {
   dependents=$(jq -r --arg name "$name" '[.data.bases[] | select(.image | test("/" + $name + ":")) | .images[]] | unique | join(", ")' "$tmp/bases.json")
   [[ -n "$dependents" ]] && say "  built FROM it: $dependents"
   return 0
+}
+
+cmd_data() {
+  need gh git
+  local hub
+  hub=$(repo_dir hub)
+  [[ -e "$hub/.git" ]] || clone_or_update hub
+  [[ -x "$hub/scripts/data.sh" ]] || die "repos/hub has no scripts/data.sh: ./harness sync, then try again"
+  "$hub/scripts/data.sh"
+  say "The hub's whole dataset is in repos/hub/data/, a depth-1 checkout of its data branch (CI owns it: never edit or push it)."
+  say "  images/<name>/manifest.<branch>.json        image.yml of every live branch, as the hub read it"
+  say "  images/<name>/latest.json, history.json      newest tag per branch; every release seen, with its run"
+  say "  images/<name>/builds/<tag>.json              build.json; beside it .diff.json, .test.<arch>.json, .layers.<arch>.json, .vulns.json"
+  say "  images/<name>/packages[.<tag>].<arch>.json   the package table of each branch's newest build"
+  say "  mods.json, proot-apps.json, observed.json (stars), bases/, status/   (repos/hub/README.md describes every file)"
+  say "Answer fleet-wide questions with jq over these files, not with hundreds of Pages requests. Re-run for fresh data."
 }
 
 # ---------------------------------------------------------------------------------------------------- docker
@@ -780,7 +809,7 @@ cmd_allow() {
 
 # ---------------------------------------------------------------------------------------------------- main
 
-usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd=${1:-help}
@@ -796,6 +825,7 @@ main() {
     setup) cmd_setup "$@" ;;
     snapshot) cmd_snapshot ;;
     lookup) cmd_lookup "$@" ;;
+    data) cmd_data ;;
     try) cmd_try "$@" ;;
     render) cmd_render "$@" ;;
     validate) cmd_validate "$@" ;;
