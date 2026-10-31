@@ -44,7 +44,7 @@ These are never edited by hand. Change the source:
 
 | Generated | Source |
 | --- | --- |
-| Image repo `README.md`, `AGENTS.md`, `LICENSE`, `.github/workflows/build.yml`, `pr-report.yml` | `image.yml`, or the builder templates for every repo |
+| Image repo `README.md`, `AGENTS.md`, `LICENSE`, `.github/FUNDING.yml`, `root/donate.txt`, `.github/workflows/build.yml`, `pr-report.yml` | `image.yml` (`upstream.sponsor` for the two donation files), or the builder templates for every repo |
 | Mod branch `README.md`, `AGENTS.md`, `build.yml` | `mod.yml` |
 | `package_versions.txt` | The build |
 | The hub's `data/` (its `data` branch), `dist/`, `out/` | The hub's ingest and generators |

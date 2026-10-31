@@ -34,7 +34,7 @@ REGISTRY=ghcr.io/$ORG
 BUILDER_IMAGE=${HARNESS_BUILDER_IMAGE:-$REGISTRY/builder:latest}
 SHELLCHECK_IMAGE=koalaman/shellcheck:stable
 CORE=(workspace builder workflows ci hub site control dumper .github docker-mods)
-GENERATED=(README.md AGENTS.md LICENSE .github/workflows/build.yml .github/workflows/pr-report.yml)
+GENERATED=(README.md AGENTS.md LICENSE .github/FUNDING.yml root/donate.txt .github/workflows/build.yml .github/workflows/pr-report.yml)
 PYTHON_REPOS=(builder workflows ci hub control)
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -503,7 +503,7 @@ cmd_render() {
     mkdir -p "$out"
     git -C "$dir" ls-files -z | (cd "$dir" && xargs -0 cp --parents -t "$out" 2>/dev/null) || true
     builder "$out" render --all
-    say "Rendered out of tree in .harness/render/$repo/ (README.md, AGENTS.md, LICENSE, .github/workflows/build.yml; docs page in .builder-out/)."
+    say "Rendered out of tree in .harness/render/$repo/ (README.md, AGENTS.md, LICENSE, .github/FUNDING.yml, root/donate.txt, the workflows; docs page in .builder-out/)."
     for file in "${GENERATED[@]}"; do
       [[ -f "$out/$file" ]] || continue
       if ! diff -q "$dir/$file" "$out/$file" >/dev/null 2>&1; then say "  differs from the checkout: $file"; fi

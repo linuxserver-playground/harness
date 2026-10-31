@@ -26,7 +26,7 @@ either, they win. Then fix this guide.
 | `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | A push to main, `hub-updated` (relayed by control after every hub deploy), or the daily cron |
 | `control` | A FastAPI GitHub App on a small server (n97). It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the server pulls it within 5 minutes |
 | `triage` | The AI first responder, on the same server as control. Every 30 s it reads control's open issues and pull requests and answers new ones (and the author's replies) with one Claude-written comment and labels, as `lsio-playground-triage[bot]`. Read-only tools: the hub's `data` branch, the site's docs, org repos and issue search, plus a cheaper research assistant (Haiku) that reads upstream code, releases, issues and the web. The evidence sits in a collapsed "What I checked" section | Push to main. Publish runs the checks and pushes `:latest`, and the server pulls it within 5 minutes |
-| `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
+| `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE, FUNDING.yml, `root/donate.txt` and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
 | `docker-mods` | `master` holds the tooling. There is one branch per mod (`<target>-<name>`) with `mod.yml` | A push to a mod branch builds the mod image, and control re-reads a changed `mod.yml` at once. The hub's next scheduled run reads the `mod.yml` |
 | `unraid-store`, `umbrel-store`, `runtipi-store` | Generated store repos, pushed hourly by the hub's `refresh.yml` | Never edit them; change the generator in the hub |
 | `.github` (`repos/dot-github`) | The org profile, CONTRIBUTING, SECURITY, issue forms and PR template | Push to main |
@@ -120,7 +120,7 @@ repo's `image.yml`. Adding an image needs no change to control, the hub or the s
 
 | Output | Rendered by | From |
 | --- | --- | --- |
-| README, AGENTS.md, LICENSE, `build.yml`, `pr-report.yml` in an image repo | `builder render` (live build) | `image.yml` + `builder/templates/` |
+| README, AGENTS.md, LICENSE, `.github/FUNDING.yml`, `root/donate.txt`, `build.yml`, `pr-report.yml` in an image repo | `builder render` (live build) | `image.yml` + `builder/templates/` |
 | Docs page, snippets, store templates, proxy confs, k8s, quadlets | hub generators | `image.yml` of every live branch |
 | Image page, build pages, packages, mods, PRoot Apps, stores pages | site | hub API snapshots (`src/data/`, on the site's `data` branch) |
 | Build page data (tests, diffs, vulns, layers) | the build (`builder record`), indexed by the hub | the release bundle |
