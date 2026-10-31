@@ -29,6 +29,10 @@ issue. The person files it.
    - compare the two builds with the hub's `diff.json` (what packages, Dockerfile or config changed).
 
    For a site or hub bug, give the URL, the API response and the expected value.
+
+   **When it does not reproduce,** say so plainly and do not file it as a bug. The draft becomes a request for
+   information: what you ran and saw, the tag, and the questions whose answers would reproduce it (is `/config` a
+   volume, restart or recreate, which tag, the log around the event). The person decides whether to file that.
 4. **Gather the evidence:**
    - the image, tag and architecture;
    - the build page link;

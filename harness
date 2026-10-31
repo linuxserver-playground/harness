@@ -476,7 +476,9 @@ cmd_try() {
     esac
   done
   set -- "${rest[@]}"
-  (( $# )) || die "usage: ./harness try <image> [tag] | --build <repo> | --stop [image] [--env KEY=VALUE]..."
+  if (( $# == 0 )) || [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    die "usage: ./harness try <image> [tag] | --build <repo> | --stop [image] [--env KEY=VALUE]..."
+  fi
   if [[ "$1" == "--stop" ]]; then
     local filter=harness-try-
     [[ -n "${2:-}" ]] && filter=harness-try-$(image_name "$2")
@@ -656,12 +658,17 @@ cmd_validate() {
         step "npm run check" npm run check
         step "npm run build" npm run build
         if have npx; then
-          (cd "$dir" && npx astro preview --port 4321 >/dev/null 2>&1 &)
+          # The preview server's command line is node .../astro.mjs preview, so a pkill on "astro preview" never finds
+          # it: keep its pid and kill that.
+          local preview_pid
+          (cd "$dir" && exec npx astro preview --port 4321 >/dev/null 2>&1) &
+          preview_pid=$!
           sleep 4
           step "a11y" node scripts/a11y.mjs http://localhost:4321/site
           step "search" node scripts/test-search.mjs http://localhost:4321/site
           step "overflow at 390px (home)" node scripts/overflow.mjs http://localhost:4321/site/
-          pkill -f "astro preview --port 4321" || true
+          pkill -P "$preview_pid" 2>/dev/null || true
+          kill "$preview_pid" 2>/dev/null || true
         fi
         say "- also run, when the change touches them: overflow.mjs on every changed page, editor-check.mjs (editor), fleet-check.mjs (fleet pages)" >>"$report"
         ;;
@@ -813,6 +820,9 @@ cmd_draft() {
       base=${3:-$(gh repo view "$ORG/$repo" --json defaultBranchRef --jq .defaultBranchRef.name)}
       head=$branch
       $fork && head=$login:$branch
+      if ! $fork && [[ "$(role)" == contributor ]]; then
+        warn "no fork yet: a contributor's PR head must be <login>:<branch> on their fork. Run ./harness fork $repo, push the branch there, then draft again."
+      fi
       out=$state/drafts/pr-$repo-${branch//\//-}.md
       local diffstat validation
       diffstat=$(git -C "$dir" diff --stat "$($fork && echo upstream || echo origin)/$base...HEAD" 2>/dev/null | tail -n 20 || true)

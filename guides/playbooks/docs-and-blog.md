@@ -38,10 +38,12 @@ Front matter is validated at build time (`src/content.config.ts`). When a page m
 - **A PR from the harness**, for anything larger, or for contributors:
   1. Members: `./harness get site`. Contributors: also run `./harness fork site`. Then
      `./harness setup site`.
-  2. Branch from `main`, and write the page or post. Match the voice of the neighbouring pages: plain,
-     direct, second person, no marketing.
-  3. Validate with `./harness validate site`, which runs check, build, a11y, search and overflow at 390px on
-     the home page. Then run overflow on the page you changed:
+  2. Branch from `main` (`upstream/main` once `./harness fork` has run, `origin/main` before), and write the
+     page or post. Match the voice of the neighbouring pages: plain, direct, second person, no marketing. Leave
+     the `updated` front matter alone: git supplies the date, and a new page does not need it.
+  3. Commit, then validate with `./harness validate site`, which runs check, build, a11y, search and overflow
+     at 390px on the home page (about five minutes; the report names the commit it ran on, and the PR draft only
+     accepts a report for the committed HEAD). Then run overflow on the page you changed:
      `node scripts/overflow.mjs http://localhost:4321/site/<path>/`.
   4. Look at it: `npx astro preview --port 4321` in `repos/site`, then open the page.
   5. Commit, push, and run `./harness draft pr site main`.

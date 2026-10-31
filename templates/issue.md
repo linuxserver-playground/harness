@@ -30,7 +30,7 @@ TODO. Paste the relevant log lines in a code block, short.
 
 TODO: anything else: workaround, suspected cause with file:line, who it affects.
 
-AI use: TODO (for example: "drafted with Claude Code through the linuxserver-playground harness; I reproduced it myself")
+AI use: TODO (the tool, and whether the reproduction above was run by the agent, by you, or not at all)
 
 <!-- harness
 intent: report-bug
