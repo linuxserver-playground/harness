@@ -13,8 +13,9 @@
 #   ./harness snapshot                       one consistent picture of the org from control, the hub and GitHub
 #   ./harness lookup <image>                 one image at a glance: branches, builds, tests, PRs, issues, dependents, why the newest build exists
 #   ./harness data                           check out the hub's data branch into repos/hub/data: the whole fleet in one clone, for fleet-wide questions
-#   ./harness try <image> [tag] | --build <repo> | --stop [image]
+#   ./harness try <image> [tag] | --build <repo> | --stop [image]   [--env KEY=VALUE]...
 #                                            run a published or locally built image in Docker and wait for init
+#                                            (--env adds variables: DOCKER_MODS=… to try a mod on the image)
 #   ./harness render <repo> [--in-place]     builder check, then render the generated files (out of tree by default)
 #   ./harness validate <repo> [--no-build]   the repo's own validation list; results go to .harness/validation/
 #   ./harness draft pr|issue|review <repo> [number]
@@ -93,8 +94,16 @@ cmd_whoami() {
     checked=$(jq -r '.checked_epoch // 0' "$profile")
     age=$(( $(date +%s) - checked ))
     if (( age < 86400 )) && [[ "$(jq -r '.version' "$profile")" == "$VERSION" ]]; then
-      briefing "$brief"
-      return
+      # A cached profile is only good while gh is still signed in as the same account.
+      local cached live=""
+      cached=$(jq -r '.login // ""' "$profile")
+      have gh && live=$(gh api user --jq .login 2>/dev/null || true)
+      if [[ -n "$cached" && -n "$live" && "$live" != "$cached" ]]; then
+        warn "the cached profile is $cached's but gh is signed in as $live: checking the role again"
+      else
+        briefing "$brief"
+        return
+      fi
     fi
   fi
 
@@ -226,6 +235,11 @@ clone_or_update() {
     # docker-mods holds one branch per mod: clone master only and fetch a mod's branch when it is needed.
     [[ "$name" == "docker-mods" ]] && args+=(--single-branch)
     gh repo clone "$ORG/$name" "$dir" -- "${args[@]}"
+    # Image repos: a read-only remote to the linuxserver original, so the build-failure triage can compare
+    # heads (git fetch linuxserver). Never push to it; the guard hook refuses anyway. docker-mods is ours alone.
+    if [[ "$name" == docker-* && "$name" != docker-mods ]]; then
+      git -C "$dir" remote add linuxserver "https://github.com/linuxserver/$name.git" 2>/dev/null || true
+    fi
     say "cloned   $name"
     return
   fi
@@ -345,7 +359,7 @@ cmd_snapshot() {
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   dir=$state/snapshot/$stamp
   mkdir -p "$dir"
-  for endpoint in status fleet runs queue pulls issues skips; do
+  for endpoint in status fleet runs queue pulls issues skips batch; do
     fetch "$CONTROL/api/$endpoint.json" >"$dir/control-$endpoint.json" || warn "control /api/$endpoint.json failed"
   done
   fetch "$HUB/api/v1/status.json" >"$dir/hub-status.json" || warn "hub status failed"
@@ -365,7 +379,7 @@ cmd_snapshot() {
     "$dir/control-fleet.json"
   [[ -s "$dir/control-fleet.json" ]] && jq -r '.helpers[] | select((.failing | length) > 0) | "helpers: \(.name) has \(.failing | length) failing branches (\(.failing | join(", ")))"' "$dir/control-fleet.json"
   [[ -s "$dir/control-queue.json" ]] && jq -r '"runners: \(.in_use)/\(.limit) jobs in use, \(.queued | length) queued"' "$dir/control-queue.json"
-  [[ -s "$dir/control-pulls.json" ]] && jq -r '"pulls:   \(.pulls | length) open (\([.pulls[] | select(.pull.title | startswith("[test data]"))] | length) of them [test data] fixtures)"' "$dir/control-pulls.json"
+  [[ -s "$dir/control-pulls.json" ]] && jq -r '"pulls:   \(.pulls | length) open (\([.pulls[] | select(.pull.title | startswith("[test data]"))] | length) of them [test data] fixtures, \([.pulls[] | select(.pull.title | startswith("Reference PR"))] | length) the reference PR)"' "$dir/control-pulls.json"
   [[ -s "$dir/control-issues.json" ]] && jq -r '"issues:  \(.issues | length) open (\([.issues[] | select(.title | startswith("[test data]"))] | length) of them [test data] fixtures)"' "$dir/control-issues.json"
   [[ -s "$dir/hub-status.json" ]] && jq -r '.data.status // .data | "hub:     \(.health // "?"), \(.images // "?") images; stale sources: \([.sources // {} | to_entries[] | select(.value.ok | not) | .key] | join(", ") | if . == "" then "none" else . end)"' "$dir/hub-status.json"
   return 0
@@ -389,25 +403,33 @@ cmd_lookup() {
     "  upstream: \(.project_url // "?") at \(.upstream_version // "?"); base \(.base // "?"); arches \(.architectures // [] | map(.arch? // .) | join(", "))",
     "  tags:     \(.tags // [] | map(.tag) | join(", "))"' "$tmp/catalog.json"
   say "  live branches (control):"
-  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built") \(.version_tag // "")\(if .drift == "ahead" then " (upstream moved to \(.upstream))" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), built \(.built_at // "?"), next check \(.next_check // "?")"' "$tmp/control.json"
+  # version_tag is the tag the last run published, or would have published when it failed; released is what users pull.
+  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built")\(if .result == "failure" then " (reason \(.reason // "?"), would have published \(.version_tag // "?"), https://github.com/\(.repo)/actions/runs/\(.run_id))" else " \(.version_tag // "") (reason \(.reason // "?"))" end); released \(.released // "nothing")\(if .drift == "ahead" then " (upstream moved to \(.upstream); check it by eye: os bases and a branch released minutes ago show ahead wrongly)" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), built \(.built_at // "?"), next check \(.next_check // "?")"' "$tmp/control.json"
   # The newest scheduler decision per branch and kind says why nothing was dispatched (cooldown, assets not ready,
   # a skip flag, "os image: builds on the package check") or that a build went out.
   fetch "$CONTROL/api/scheduler.json?image=$name" >"$tmp/scheduler.json" || echo '{"decisions":[]}' >"$tmp/scheduler.json"
   say "  scheduler (newest decision per branch and check):"
   jq -r '[.decisions[] | .decision + {reason: (.info.reason // "")}] | group_by([.branch, .kind]) | map(max_by(.at)) | sort_by(.branch, .kind)[]
     | "    \(.branch) \(.kind): \(.outcome)\(if .reason != "" then " (\(.reason))" else "" end) at \(.at[:16])"' "$tmp/scheduler.json"
-  say "  recent releases (hub):"
-  jq -r --arg site "$SITE" --arg name "$name" '.data.builds[:5][] | "    \(.tag) \(.branch) \(.created) tests \(if .test_success then "passed" else "FAILED" end) \(.platforms | map("\(.arch)=\(.result)") | join(" "))  \($site)/images/\($name)/builds/\(.tag)/"' "$tmp/builds.json"
+  # The newest dispatch per branch is the build control last asked for; a workflow_dispatch by a person shows in
+  # neither list (gh api repos/<org>/<repo>/actions/runs/<id> --jq .triggering_actor.login names them).
+  fetch "$CONTROL/api/scheduler.json?image=$name&outcome=dispatch" >"$tmp/dispatches.json" || echo '{"decisions":[]}' >"$tmp/dispatches.json"
+  jq -r '[.decisions[] | .decision + {reason: (.info.reason // ""), as: (.info.dispatch_reason // "")}] | group_by(.branch) | map(max_by(.at))[]
+    | "    \(.branch) last dispatch by control: \(.kind) check → \(.as) build (\(.reason)) at \(.at[:16])"' "$tmp/dispatches.json"
+  say "  recent releases (hub; a record newer than its Release by an hour or more is a republish of the same tag):"
+  jq -r --arg site "$SITE" --arg name "$name" --slurpfile control "$tmp/control.json" '
+    ($control[0].releases // [] | map({(.tag): .published_at}) | add // {}) as $published
+    | .data.builds[:5][] | "    \(.tag) \(.branch) record \(.created)\(if $published[.tag] then " release \($published[.tag])" + (if ((.created | sub("\\+00:00$"; "Z") | fromdateiso8601) - ($published[.tag] | sub("\\+00:00$"; "Z") | fromdateiso8601)) > 3600 then " REPUBLISHED" else "" end) else "" end) tests \(if .test_success then "passed" else "FAILED" end) \(.platforms | map("\(.arch)=\(.result)") | join(" "))  \($site)/images/\($name)/builds/\(.tag)/"' "$tmp/builds.json"
   # Why the newest release exists: the build page's "Why this built" panel comes from the same diff.
   local newest
   newest=$(jq -r '.data.builds[0].tag // ""' "$tmp/builds.json")
   if [[ -n "$newest" ]] && fetch "$HUB/api/v1/catalog/$name/builds/$newest/diff.json" >"$tmp/diff.json" 2>/dev/null; then
-    jq -r '.data.diff | "  why \(.tag) built: trigger \(.trigger // "?"); \(.reasons // [] | join("; "))\(if (.commit.commits // []) | length > 0 then "; commits: " + ((.commit.commits | map("\(.sha[:7]) \(.subject)\(if .bot then " (bot)" else "" end)")) | join(", ")) else "" end)"' "$tmp/diff.json"
+    jq -r '.data.diff | "  why the newest record of \(.tag) exists (a REPUBLISHED tag was minted by an earlier run: see the dispatches above): trigger \(.trigger // "?"); \(.reasons // [] | join("; "))\(if (.commit.commits // []) | length > 0 then "; commits: " + ((.commit.commits | map("\(.sha[:7]) \(.subject)\(if .bot then " (bot)" else "" end)")) | join(", ")) else "" end)"' "$tmp/diff.json"
   fi
   fetch "$CONTROL/api/pulls.json" >"$tmp/pulls.json" || echo '{"pulls":[]}' >"$tmp/pulls.json"
   fetch "$CONTROL/api/issues.json" >"$tmp/issues.json" || echo '{"issues":[]}' >"$tmp/issues.json"
   jq -r --arg repo "$ORG/docker-$name" '[.pulls[] | select(.pull.repo == $repo)] |
-    "  open PRs: \(length)", (.[] | "    #\(.pull.number) \(.pull.title) (build \(.run.conclusion // .run.status // "none"), review \(.pull.review_state // "none"))")' "$tmp/pulls.json"
+    "  open PRs: \(length)", (.[] | "    #\(.pull.number) \(.pull.title) (build \(.run.conclusion // .run.status // "none"), review \(.pull.review_state // "none"))\(if (.pull.title | startswith("Reference PR")) then "  [the reference PR: not work, leave it out of rankings]" else "" end)")' "$tmp/pulls.json"
   jq -r --arg repo "$ORG/docker-$name" '[.issues[] | select(.repo == $repo)] |
     "  open issues: \(length)", (.[] | "    #\(.number) \(.title) [\(.labels | join(", "))]")' "$tmp/issues.json"
   local dependents
@@ -436,7 +458,18 @@ cmd_data() {
 
 cmd_try() {
   need docker jq curl
-  (( $# )) || die "usage: ./harness try <image> [tag] | --build <repo> | --stop [image]"
+  # --env KEY=VALUE (repeatable) anywhere on the line adds variables to the container: DOCKER_MODS and the mod's
+  # own settings, or an image option under test. The rest of the arguments keep their meaning.
+  local extra_env=() rest=()
+  while (( $# )); do
+    case "$1" in
+      --env | -e) [[ "${2:-}" == *=* ]] || die "--env takes KEY=VALUE"; extra_env+=(-e "$2"); shift 2 ;;
+      --env=*) extra_env+=(-e "${1#--env=}"); shift ;;
+      *) rest+=("$1"); shift ;;
+    esac
+  done
+  set -- "${rest[@]}"
+  (( $# )) || die "usage: ./harness try <image> [tag] | --build <repo> | --stop [image] [--env KEY=VALUE]..."
   if [[ "$1" == "--stop" ]]; then
     local filter=harness-try-
     [[ -n "${2:-}" ]] && filter=harness-try-$(image_name "$2")
@@ -461,6 +494,7 @@ cmd_try() {
     docker pull --quiet "$ref" >/dev/null || die "cannot pull $ref"
   fi
   local catalog args=(-d --name "harness-try-$name" -e PUID="$(id -u)" -e PGID="$(id -g)" -e TZ=Etc/UTC)
+  (( ${#extra_env[@]} )) && args+=("${extra_env[@]}")
   catalog=$(fetch "$HUB/api/v1/catalog/$name.json" 2>/dev/null || echo '{}')
   local data=$state/try/$name
   mkdir -p "$data"
@@ -596,7 +630,19 @@ cmd_validate() {
           step "generate --offline" "$dir/.venv/bin/python" -m lsio_hub.generate --offline
         fi
         ;;
-      workflows) step "scripts/check.sh" ./scripts/check.sh ;;
+      workflows)
+        [[ -x "$dir/.venv/bin/python" ]] || die "no .venv in workflows: ./harness setup workflows"
+        if have shellcheck; then
+          step "scripts/check.sh" ./scripts/check.sh
+        else
+          # check.sh calls shellcheck from PATH; give it the container, as doctor promises.
+          mkdir -p "$state/bin"
+          # shellcheck disable=SC2016
+          printf '#!/usr/bin/env bash\nexec docker run --rm -v "$PWD":/mnt -w /mnt %s "$@"\n' "$SHELLCHECK_IMAGE" >"$state/bin/shellcheck"
+          chmod +x "$state/bin/shellcheck"
+          step "scripts/check.sh (shellcheck from $SHELLCHECK_IMAGE)" env PATH="$state/bin:$PATH" ./scripts/check.sh
+        fi
+        ;;
       site)
         [[ -d "$dir/node_modules" ]] || die "no node_modules in site: ./harness setup site"
         step "snapshots from the data branch" npm run snapshot
@@ -809,7 +855,7 @@ cmd_allow() {
 
 # ---------------------------------------------------------------------------------------------------- main
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd=${1:-help}
