@@ -50,9 +50,10 @@ The change is merged to `workflows` main by PR first ([infra-change](infra-chang
 0. See where things stand before touching anything: `git -C repos/workflows ls-remote origin refs/tags/v1 refs/heads/main`
    (the tag may already be on main: someone else released), and `gh run list -R linuxserver-playground/docker-heimdall --limit 3`
    (a proof build may already be running; `gh api repos/linuxserver-playground/docker-heimdall/actions/runs/<id> --jq '.referenced_workflows[].sha'`
-   says which workflows commit it used). Never move a tag that is already there or start a second proof for one run.
-1. In `repos/workflows` on main: `./harness validate workflows` (runs `./scripts/check.sh`, with shellcheck from
-   its container when none is installed) and stop on any failure.
+   says which workflows commit it used, and `curl -fsS https://ci.thelamer.duckdns.org:8443/api/builds/linuxserver-playground/docker-heimdall/<id>.json | jq '{reason: .build.reason, event: .run.event, actor: .run.actor}'`
+   says what kind of run it was). Never move a tag that is already there or start a second proof for one run.
+1. In `repos/workflows` on main: `./harness setup workflows` once, then `./harness validate workflows` (runs
+   `./scripts/check.sh`, with shellcheck from its container when none is installed) and stop on any failure.
 2. Confirm it is backward compatible for every `@v1` caller: the same inputs, outputs and ci interface. If it
    is not, stop: it needs a new major tag.
 3. If the change needs a new builder or ci image too (a step calls a new builder command, or names a file an

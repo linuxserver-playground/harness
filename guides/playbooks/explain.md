@@ -20,7 +20,7 @@
    2. **Upstream?** Check whether the upstream release or package is broken, half-published (one
       architecture missing), or yanked. Check the upstream repo's releases and the version source in
       `image.yml` (`upstream.version`). Our branch is upstream's head plus the conversion commits:
-      `git -C repos/docker-<name> fetch -q linuxserver` (the read-only remote `./harness get` adds) and the
+      `./harness get <name>`, then `git -C repos/docker-<name> fetch -q linuxserver` (the read-only remote `get` adds) and the
       Jenkins status on that head, `gh api repos/linuxserver/docker-<name>/commits/<branch>/status --jq .state`,
       say whether the same source is red on live too.
    3. **Network?** GHCR 5xx, mirror timeouts, rate limits, `curl: (28) Failed to connect` to the project's
@@ -41,7 +41,9 @@
    cooldown, assets not ready, a skip flag). First check that the record is the one that minted the tag: a
    `manual` or `rebuild` run on a released head republishes the tag with a new record, so compare the Release's
    `published_at` with the record's `created` (`./harness lookup` marks the tag REPUBLISHED when they differ by
-   an hour or more) and read the dispatch that made the tag from `/api/scheduler.json?image=<name>&outcome=dispatch`.
+   an hour or more, and lists every run that published it with its reason and link: the first minted the tag,
+   the rest republished it). "When was it released" is the Release's date; the record's date is the newest
+   republish. Control's dispatches are at `/api/scheduler.json?image=<name>&outcome=dispatch`.
    A `workflow_dispatch` by a person appears in neither control list; `gh api repos/<org>/<repo>/actions/runs/<id> --jq .triggering_actor.login`
    names them (control's own dispatches show as its App).
 4. **For a bug report,** reproduce it where you can: `./harness try <image> <tag>`, then follow the reported

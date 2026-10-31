@@ -375,7 +375,7 @@ cmd_snapshot() {
   ln -sfn "$stamp" "$state/snapshot/latest"
   say "snapshot $stamp in .harness/snapshot/latest/"
   [[ -s "$dir/control-fleet.json" ]] && jq -r '
-    "fleet:   \(.rows | length) live branches, \([.rows[] | select(.result == "failure")] | length) red, \([.rows[] | select(.drift == "ahead")] | length) behind upstream, \([.rows[] | select((.skip | length) > 0)] | length) with skip flags"' \
+    "fleet:   \(.rows | length) live branches, \([.rows[] | select(.result == "failure")] | length) red (\([.rows[] | select(.result == "failure" and (.skip | length) > 0)] | length) of them skip-flagged), \([.rows[] | . as $r | select($r.drift == "ahead" and $r.source != "os" and (($r.released // "") | contains($r.upstream // "~") | not))] | length) behind upstream (\([.rows[] | select(.drift == "ahead")] | length) rows say ahead; os bases and tags that embed the upstream value are discounted), \([.rows[] | select((.skip | length) > 0)] | length) with skip flags"' \
     "$dir/control-fleet.json"
   [[ -s "$dir/control-fleet.json" ]] && jq -r '.helpers[] | select((.failing | length) > 0) | "helpers: \(.name) has \(.failing | length) failing branches (\(.failing | join(", ")))"' "$dir/control-fleet.json"
   [[ -s "$dir/control-queue.json" ]] && jq -r '"runners: \(.in_use)/\(.limit) jobs in use, \(.queued | length) queued"' "$dir/control-queue.json"
@@ -404,7 +404,7 @@ cmd_lookup() {
     "  tags:     \(.tags // [] | map(.tag) | join(", "))"' "$tmp/catalog.json"
   say "  live branches (control):"
   # version_tag is the tag the last run published, or would have published when it failed; released is what users pull.
-  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built")\(if .result == "failure" then " (reason \(.reason // "?"), would have published \(.version_tag // "?"), https://github.com/\(.repo)/actions/runs/\(.run_id))" else " \(.version_tag // "") (reason \(.reason // "?"))" end); released \(.released // "nothing")\(if .drift == "ahead" then " (upstream moved to \(.upstream); check it by eye: os bases and a branch released minutes ago show ahead wrongly)" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), built \(.built_at // "?"), next check \(.next_check // "?")"' "$tmp/control.json"
+  jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built")\(if .result == "failure" then " (reason \(.reason // "?"), would have published \(.version_tag // "?"), https://github.com/\(.repo)/actions/runs/\(.run_id))" else " \(.version_tag // "") (reason \(.reason // "?"))" end); released \(.released // "nothing")\(if .drift == "ahead" then " (upstream moved to \(.upstream); check it by eye: os bases and a branch released minutes ago show ahead wrongly)" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), last run ended \(.built_at // "?"), next check \(.next_check // "?")"' "$tmp/control.json"
   # The newest scheduler decision per branch and kind says why nothing was dispatched (cooldown, assets not ready,
   # a skip flag, "os image: builds on the package check") or that a build went out.
   fetch "$CONTROL/api/scheduler.json?image=$name" >"$tmp/scheduler.json" || echo '{"decisions":[]}' >"$tmp/scheduler.json"
@@ -420,11 +420,16 @@ cmd_lookup() {
   jq -r --arg site "$SITE" --arg name "$name" --slurpfile control "$tmp/control.json" '
     ($control[0].releases // [] | map({(.tag): .published_at}) | add // {}) as $published
     | .data.builds[:5][] | "    \(.tag) \(.branch) record \(.created)\(if $published[.tag] then " release \($published[.tag])" + (if ((.created | sub("\\+00:00$"; "Z") | fromdateiso8601) - ($published[.tag] | sub("\\+00:00$"; "Z") | fromdateiso8601)) > 3600 then " REPUBLISHED" else "" end) else "" end) tests \(if .test_success then "passed" else "FAILED" end) \(.platforms | map("\(.arch)=\(.result)") | join(" "))  \($site)/images/\($name)/builds/\(.tag)/"' "$tmp/builds.json"
-  # Why the newest release exists: the build page's "Why this built" panel comes from the same diff.
+  # Why the newest release exists: the build page's "Why this built" panel comes from the same diff. Control lists
+  # every run that published the tag, so a republished tag shows the run that minted it and each republish.
   local newest
   newest=$(jq -r '.data.builds[0].tag // ""' "$tmp/builds.json")
+  if [[ -n "$newest" ]]; then
+    jq -r --arg tag "$newest" '[.builds // [] | .[] | select(.version_tag == $tag and .result == "success")] | sort_by(.published_at)
+      | if length == 0 then empty else "  runs that published \($tag): \(length) (the first minted it, the rest republished it)", (.[] | "    \(.published_at[:16]) reason \(.reason) \(.run_url)") end' "$tmp/control.json"
+  fi
   if [[ -n "$newest" ]] && fetch "$HUB/api/v1/catalog/$name/builds/$newest/diff.json" >"$tmp/diff.json" 2>/dev/null; then
-    jq -r '.data.diff | "  why the newest record of \(.tag) exists (a REPUBLISHED tag was minted by an earlier run: see the dispatches above): trigger \(.trigger // "?"); \(.reasons // [] | join("; "))\(if (.commit.commits // []) | length > 0 then "; commits: " + ((.commit.commits | map("\(.sha[:7]) \(.subject)\(if .bot then " (bot)" else "" end)")) | join(", ")) else "" end)"' "$tmp/diff.json"
+    jq -r '.data.diff | "  why the newest record of \(.tag) exists: trigger \(.trigger // "not recorded (record made before 2026-10-31)"); \(.reasons // [] | join("; "))\(if (.commit.commits // []) | length > 0 then "; commits: " + ((.commit.commits | map("\(.sha[:7]) \(.subject)\(if .bot then " (bot)" else "" end)")) | join(", ")) else "" end)"' "$tmp/diff.json"
   fi
   fetch "$CONTROL/api/pulls.json" >"$tmp/pulls.json" || echo '{"pulls":[]}' >"$tmp/pulls.json"
   fetch "$CONTROL/api/issues.json" >"$tmp/issues.json" || echo '{"issues":[]}' >"$tmp/issues.json"
@@ -432,9 +437,10 @@ cmd_lookup() {
     "  open PRs: \(length)", (.[] | "    #\(.pull.number) \(.pull.title) (build \(.run.conclusion // .run.status // "none"), review \(.pull.review_state // "none"))\(if (.pull.title | startswith("Reference PR")) then "  [the reference PR: not work, leave it out of rankings]" else "" end)")' "$tmp/pulls.json"
   jq -r --arg repo "$ORG/docker-$name" '[.issues[] | select(.repo == $repo)] |
     "  open issues: \(length)", (.[] | "    #\(.number) \(.title) [\(.labels | join(", "))]")' "$tmp/issues.json"
-  local dependents
-  dependents=$(jq -r --arg name "$name" '[.data.bases[] | select(.image | test("/" + $name + ":")) | .images[]] | unique | join(", ")' "$tmp/bases.json")
-  [[ -n "$dependents" ]] && say "  built FROM it: $dependents"
+  # Dependents per tag, from the hub's base graph (the final FROM of each build; a multi-stage build whose base is
+  # only a build stage shows as scratch, so the Dockerfiles are the last word).
+  jq -r --arg name "$name" '[.data.bases[] | select(.image | test("/" + $name + ":"))] | group_by(.image) | map({image: .[0].image, images: ([.[].images[]] | unique)}) | sort_by(.image)[]
+    | "  built FROM \(.image | sub("^ghcr.io/"; ""))\(if (.image | test("/linuxserver/")) then " (the linuxserver base: these builds are not on the playground base yet)" else "" end): \(.images | length) images: \(.images | join(", "))"' "$tmp/bases.json"
   return 0
 }
 

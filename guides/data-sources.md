@@ -99,7 +99,12 @@ so later runs fetch only what changed). The triage bot reads the fleet the same 
 | `mods.json`, `proot-apps.json`, `observed.json`, `bases/`, `status/` | The mods index, the PRoot Apps catalogue, stars and archive flags, base layer digests by index digest, each source's freshness |
 
 `repos/hub/README.md` ("Data layout") describes every file. The checkout is CI's: never edit it, never push it,
-and never add it to `main`. Say when it was fetched (`git -C repos/hub/data log -1 --format=%cd`).
+and never add it to `main`. It does not exist until `./harness data` has run once. Say when it was fetched
+(`git -C repos/hub/data log -1 --format=%cd`). Filter on `kind` when the question is about apps: bases and tools
+are live branches too. Before proposing a release notes source for a branch, read
+`repos/workspace/docs/upstream-notes-inventory.md`: it records which upstreams were probed and found to have
+nothing machine-readable (tags without releases, empty release bodies, vendor pages), and a nightly branch never
+has notes.
 
 ```bash
 D=repos/hub/data

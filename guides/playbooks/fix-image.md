@@ -20,8 +20,10 @@ the change is not the image's job, the mod or custom-script answer with proof th
    - prove it on the released image: `./harness try <image> --env DOCKER_MODS=ghcr.io/linuxserver-playground/mods:<branch> --env INSTALL_PACKAGES=<pkg>`,
      then `docker exec harness-try-<image> <pkg> --version`;
    - give the person the compose lines (the full `ghcr.io/linuxserver-playground/mods:` name), the mod's page
-     (`/mods/<branch>/`), and the `/custom-cont-init.d` one-liner for a single box. Draft no PR. Offer the image
-     change only if they insist, with the reviewer's likely answer stated.
+     (`/mods/<branch>/`), and for a single box the custom init script: a file `/config/custom-cont-init.d/50-htop`
+     holding `#!/bin/bash` and `apk add --no-cache htop` (`apt-get install -y htop` on Ubuntu bases), executable.
+   - Draft no PR, and do not make the image change "as well": the original request is not insistence. Say what
+     a reviewer would answer, ask once whether they still want it in the image, and stop until they say so.
 2. **Is there an open PR or issue?** Check `./harness lookup <image>`.
 3. **Which branch?** `./harness lookup <image>` lists the live branches. Each has its own `image.yml`. Target
    the one the change applies to, and do the change separately per branch if it applies to several.
@@ -31,7 +33,8 @@ the change is not the image's job, the mod or custom-script answer with proof th
 1. **Get the repo:** `./harness get <name>`. Contributors also run `./harness fork <name>`.
 2. **Branch:**
    - members: `git -C repos/docker-<name> switch -c <topic> origin/<live branch>`;
-   - contributors: `git -C repos/docker-<name> switch -c <topic> upstream/<live branch>`.
+   - contributors: `git -C repos/docker-<name> switch -c <topic> upstream/<live branch>` once `./harness fork` has
+     run (it renames the org remote to `upstream`); before the fork, `origin/<live branch>` is the org.
 3. **Read the repo's `AGENTS.md`** (generated), then the Dockerfiles and the `root/` units the change
    touches.
 4. **Make the change in the right file:**
@@ -49,7 +52,11 @@ the change is not the image's job, the mod or custom-script answer with proof th
 
 5. **Add a changelog entry** at the top of `changelog:` in `image.yml` for any Dockerfile or `root/` change.
    Use today's date and one short factual sentence.
-6. **Validate:** `./harness validate docker-<name>`. Fix every FAILED. A WARN needs a reason in the PR.
+6. **Validate:** `./harness validate docker-<name>`. Fix every FAILED. A WARN needs a reason in the PR, except
+   two that every topic branch gets and that mean nothing: `README.md differs (run builder render)` (drift only
+   warns; the live build re-renders) and `checked out branch '<topic>' is not the manifest branch (dev build)`
+   (builder's name for any branch that is not the live one). Run validate again after the commit in step 9: the
+   PR draft only accepts a report made for the committed HEAD.
 7. **Run it:** `./harness try --build docker-<name>`. Exercise what changed. Restart it against the same
    `/config`, to check that it survives an existing install. If the change is about upgrades, start the
    released image first, then yours on the same data.

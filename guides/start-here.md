@@ -61,7 +61,8 @@ Some habits make an agent useful:
 ## Running things
 
 - "Run sonarr locally so I can click around."
-- "Run the PR build of heimdall #5 next to the released one."
+- "Run the PR build of heimdall #6 next to the released one." (its image exists once a maintainer has added
+  `safe-to-publish`; control's `/api/pulls.json` gives the tag as `quarantine_tag`)
 - "Show me what the README will look like after my image.yml change."
 - "Force a hub refresh and tell me when the site has the new build." (members)
 
