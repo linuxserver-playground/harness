@@ -117,6 +117,25 @@ jq -r --arg since "$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)" 'select(.crea
 jq -r '.upstream.version.type // "none"' $D/images/*/manifest.*.json | sort | uniq -c | sort -rn
 ```
 
+## LinuxServer Labs
+
+Labs (`linuxserverlabs-playground`) runs its own instances of the same code, so every route and file above exists
+there too, with Labs data:
+
+| What | Where |
+| --- | --- |
+| Labs control | `https://labs-ci.thelamer.duckdns.org:8443`: the same `/api/*.json` (`status`, `fleet`, `runs`, `queue`, `pulls`, `issues`…). `/api/issues.json` lists the Labs org's open issues, the proposals among them, which is what the Labs site's members-only proposals list reads |
+| Labs hub | `https://linuxserverlabs-playground.github.io/hub/api/v1/` (the same endpoints; `images.json` still lists them under `data.repositories.linuxserver`). No stores, mods or PRoot Apps. Its `data` branch: `gh repo clone linuxserverlabs-playground/hub -- --branch data --depth 1` |
+| Labs site | `https://linuxserverlabs-playground.github.io/site/`: images, builds, pending approval (repos with the `labs-pending` topic), proposals for signed-in members |
+| Proposals | `gh issue list -R linuxserverlabs-playground/proposals --label proposal` (labels `meets-bar`, `needs-info`, `accepted`); the check workflow's comment on each says what passed |
+| Pending repos | `gh search repos --owner linuxserverlabs-playground topic:labs-pending` |
+
+Point the read commands at Labs with `HARNESS_ORG=linuxserverlabs-playground`: `snapshot`, `lookup`, `control` and
+`try` then use Labs control, the Labs hub and site, and `ghcr.io/linuxserverlabs-playground` (the shared builder
+stays the main org's). For example `HARNESS_ORG=linuxserverlabs-playground ./harness lookup photocraft`. Do not
+run `whoami` that way: it would record the Labs org as the person's main org. `./harness data` reads the main hub
+only.
+
 ## GitHub
 
 - `gh search prs --owner linuxserver-playground --state open` and `gh search issues …` search across the org.

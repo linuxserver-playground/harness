@@ -1,6 +1,6 @@
 ---
 name: propose-image
-description: Contributors: propose a new image to the labs org with researched facts and an optional local scaffold. Use when a non-member wants a new image.
+description: Contributors: propose a new image to LinuxServer Labs through its proposal form, with researched facts, and optionally try the image locally. Use when a non-member wants an image of an app they do not develop.
 ---
 
 Read `guides/playbooks/propose-image.md` in this repository and follow it step by step. Check the role in

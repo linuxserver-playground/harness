@@ -49,8 +49,13 @@ Some habits make an agent useful:
 
 - "Add the `ffmpeg` package to the jellyfin image, test it, and draft the PR."
 - "Add a new env var to heimdall that sets the default theme."
-- "Add an image for Mealie." Members get a new repo and a PR. Contributors get a proposal, filed as an issue on
-  `harness` until the labs org exists.
+- "Add an image for Mealie." Members get a new repo and a PR. Contributors get a proposal to LinuxServer Labs,
+  filed through its issue form.
+- "I wrote an app. How do I get it into LinuxServer?" The agent helps you make it easy to self-host (one state
+  directory, environment config, proxy-friendly, release assets per architecture), then fills in the Labs proposal.
+- "Try Labs proposal 12." Builds the image the team would make from the proposal and runs it in a local sandbox.
+- "Accept Labs proposal 12." (Labs members) Prepares the repository, Pages and first pull request as one script
+  for you to read and run.
 - "Make a mod that installs yt-dlp into any image." Members get a branch and a PR. Contributors get an issue with
   `mod.yml` drafted, because only a member can create the branch.
 - "Fix the typo on the Kubernetes docs page."

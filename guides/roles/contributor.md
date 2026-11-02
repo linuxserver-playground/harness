@@ -22,7 +22,9 @@ keep the two in step: a change to this path is a change to those pages too (`src
 | Fix or improve an image | A fork and a PR to the live branch | [fix-image](../playbooks/fix-image.md) |
 | Change an existing mod | A fork and a PR to the mod's branch | [mod](../playbooks/mod.md) |
 | A new mod | An issue asking a member to create the branch, with `mod.yml` drafted | [mod](../playbooks/mod.md) |
-| A new image | A proposal: an issue on `harness` until the labs org exists | [propose-image](../playbooks/propose-image.md) |
+| A new image | A proposal to LinuxServer Labs, through the form in `linuxserverlabs-playground/proposals` | [propose-image](../playbooks/propose-image.md) |
+| An image of your own app | Make it easy to self-host, then propose it to Labs ([roles/labs-developer.md](labs-developer.md)) | [labs-image](../playbooks/labs-image.md) |
+| See the image a proposal would get | `./harness labs try <issue>`: built and run in a local sandbox | [labs-accept](../playbooks/labs-accept.md), step 2 |
 | Fix or add docs in an existing section | A fork and a PR to `site` | [docs-and-blog](../playbooks/docs-and-blog.md) |
 | Fix a bug in the site, hub, builder, workflows, ci or control | A fork and a PR, or an issue for anything larger | [infra-change](../playbooks/infra-change.md) |
 | Review a PR | Locally, for yourself. Post a comment only if the person wants to | [review](../playbooks/review.md) |
@@ -32,7 +34,8 @@ keep the two in step: a change to this path is a change to those pages too (`src
 | Not available | Why | Instead |
 | --- | --- | --- |
 | Pushing to org repos | No write access | `./harness fork <repo>`, push to the fork, open the PR against the org |
-| Creating repos in the org | Members only | [propose-image](../playbooks/propose-image.md). A scaffold can live in the person's own account |
+| Creating repos in the org, or in Labs | Members only (Labs members for Labs) | [propose-image](../playbooks/propose-image.md) or [labs-image](../playbooks/labs-image.md). A scaffold can live in the person's own account |
+| Pushing to a Labs image, even your own app's | Outside developers never get push access; `maintainers` is credit | A fork and a pull request |
 | Blog posts | The team writes the blog | Suggest a topic in an issue on `site` (`./harness draft request site`) |
 | New docs sections, layout, the editor, fleet pages, auth | Team-only areas of the site | An issue describing the need |
 | Data shapes, schemas, API changes, CONVENTIONS | They ripple through every repo | An issue describing the need ([contract-change](../playbooks/contract-change.md) explains what a member would do) |

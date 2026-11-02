@@ -13,6 +13,7 @@ either, they win. Then fix this guide.
 | Control plane: scheduler, webhooks, live JSON API, member actions, Discord | the org's `CONTROL_URL` variable; `./harness control <path>` reads its `/api/*.json` | the site's fleet pages, the team, agents |
 | Images | `ghcr.io/linuxserver-playground/<name>` | users |
 | Branch builds, PR builds, staging | `ghcr.io/linuxserver-playground/dev/<name>`, `untrusted-pr/<name>`, `build/<name>` | reviewers |
+| LinuxServer Labs: its site, hub, control, proposals and images | https://linuxserverlabs-playground.github.io/site/, `…/hub/`, `https://labs-ci.thelamer.duckdns.org:8443`, `ghcr.io/linuxserverlabs-playground/<name>` ("LinuxServer Labs" below) | developers proposing their apps, the Labs team, users of unproven software |
 
 ## The repos
 
@@ -129,6 +130,63 @@ repo's `image.yml`. Adding an image needs no change to control or the hub.
 
 So the place to fix a wrong README line is `image.yml`, not the README. The place to fix a wrong section on
 every README is the builder template. A wrong field in every Unraid template is a hub generator.
+
+## LinuxServer Labs
+
+A second organisation, `linuxserverlabs-playground` (production `linuxserverlabs`), for images of software that is
+not yet proven. The bar for the software is lower; the process is the same. Design: `repos/workspace/docs/labs.md`;
+settled points: DECISIONS.md, "Labs".
+
+| Piece | Labs | Shared with the main org |
+| --- | --- | --- |
+| Org, members (the Labs admins team), org secrets, GHCR namespace, the org's own 20 runner slots | its own | |
+| Control | its own instance of the same image (own GitHub App, OAuth App, Discord channel), `https://labs-ci.thelamer.duckdns.org:8443` | the code |
+| Hub | `linuxserverlabs-playground/hub`: thin callers of the main hub's reusable `deploy-run.yml` and `refresh-run.yml`, with stores, mods and PRoot Apps off; its own `data` branch and Pages | the code |
+| Site | `linuxserverlabs-playground/site`: the main site's code built in Labs mode (`PUBLIC_SITE_MODE=labs`) from the Labs hub; a Labs notice and badge, its own home page (the bar, the steps, the proposal button), pending approval, members-only proposals; no docs, blog, mods, PRoot Apps or stores | the code |
+| Workflows, builder, ci, dumper, base images | | shared: Labs repos call `linuxserver-playground/workflows@v1` and build `FROM ghcr.io/linuxserver-playground/baseimage-*` |
+| Harness | | this one: [labs-image](playbooks/labs-image.md), [labs-accept](playbooks/labs-accept.md), `./harness labs` |
+
+The Labs repos:
+
+- `proposals`: the proposal issue form (`.github/ISSUE_TEMPLATE/proposal.yml`) and a check workflow that reads each
+  opened or edited proposal against the real upstream with `GITHUB_TOKEN` only (owner type, licence, latest stable
+  release and its assets, name collisions in Labs, the main org and live LinuxServer), keeps one comment up to date
+  and labels it `meets-bar` or `needs-info`. A member adds `accepted`.
+- `docker-template`: two things. Its `main` (what "Use this template" copies) is the developers' starter kit: a
+  working web-app image at the root, the selkies variant under `variants/selkies/`, and `GETTING-STARTED.md` for
+  building, running and checking it locally in a repository of their own org (nothing publishes from there; its URL
+  goes in the proposal's "Working repository" field). Its `pending` branch is the "Image pending approval" README
+  (with a `Proposal:` line) and the generated `pr-report.yml`, with no `image.yml`: `labs accept` pushes it as a new
+  repo's `main`, so the repo is a helper and builds nothing until its first pull request merges.
+- `docker-<name>`: Labs images, laid out like any image repo, with `maintainers` in `image.yml` (credit and who is
+  mentioned, never access). `docker-photocraft` (a single-app selkies image: `github_release` with `require_assets`
+  on its debs) is the worked example.
+- `hub`, `site`: the thin deploy repositories above. `.github`: the Labs rules and contributing guide.
+
+**How a Labs image comes to be:**
+
+1. A developer (or anyone) files a proposal through the form, optionally with a working repository made from
+   `docker-template`; the check comments and labels it.
+2. A Labs member runs `./harness labs try <issue>`: a scaffold built from the form, built and run in a local
+   sandbox.
+3. The member runs `./harness labs accept <issue>`, reads the `accept.sh` it writes, and runs it: `docker-<name>`
+   created empty with docker-template's `pending` branch as `main` (the proposal linked and `build.yml` added in a
+   `[skip ci]` commit), Pages on, the `labs-pending` topic, and the scaffold (or the developer's working repository's
+   files) as the first pull request, crediting the proposer. The issue gets `accepted`.
+4. The pull request builds to `untrusted-pr/<name>` and posts the report comment; the team reviews, the proposer
+   iterates by fork pull requests into its branch. The Labs site lists the repo as pending approval.
+5. A member merges: `release.branch: main` makes `main` live, the first build is dispatched if the merge started
+   none, `labs-pending` comes off. From there it is the main org's flow, inside Labs: Labs control discovers and
+   schedules it, the Labs hub ingests its releases, the Labs site shows it.
+
+**Builder knows Labs** from the repository owner (`GITHUB_REPOSITORY`): generated files open with a Labs notice,
+link the Labs site and hub (the Labs org's `SITE_URL` and `HUB_URL` Actions variables, which the shared workflow passes to builder as `BUILDER_SITE_URL` and `BUILDER_HUB_URL`), and
+`builder check` adds a Labs profile: `maintainers` required, `kind: app` only, a typed stable version source with
+`require_assets`, the image's own stage on a playground base image.
+
+**Graduation** transfers a repository to the main org (`./harness labs graduate` is planned). Staying in Labs is
+not automatic either: a lasting `require_assets` hold or red build opens an issue mentioning the maintainers, and
+an image nobody fixes is archived (planned in Labs control).
 
 ## Capacity
 

@@ -61,7 +61,11 @@
       "Bash(cargo test:*)",
       "Bash(cargo clippy:*)",
       "Bash(./harness control:*)",
-      "Bash(curl -fsS https://linuxserver-playground.github.io/*)"
+      "Bash(curl -fsS https://linuxserver-playground.github.io/*)",
+      "Bash(./harness labs form:*)",
+      "Bash(./harness labs scaffold:*)",
+      "Bash(./harness labs accept:*)",
+      "Bash(curl -fsS https://linuxserverlabs-playground.github.io/*)"
     ],
     "deny": [
       "Bash(gh pr create --repo linuxserver/*)",

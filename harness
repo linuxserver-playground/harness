@@ -24,18 +24,37 @@
 #                                            (issue: a bug; request: a feature, topic or removal; proposal: a new image)
 #   ./harness allow push|force-push|tag|delete <repo> [minutes]
 #                                            members: let the guard hook pass one protected action for a while (default 30 min)
+#   ./harness labs form <name>               the filled proposal draft as a prefilled link to the Labs proposal form
+#   ./harness labs scaffold <issue>          a v2 image repo from a Labs proposal, in .harness/labs/<name>/
+#   ./harness labs try <issue> [--fresh] | --stop <name>
+#                                            build the scaffold (kept with your edits; --fresh rewrites it) and run it
+#                                            sandboxed on localhost: no host mounts, no credentials
+#   ./harness labs accept <issue> [--fresh]  Labs members: write the commands that elevate a proposal (accept.sh), run nothing
 #
 # Nothing here opens an issue or a pull request, posts a comment or pushes. Those stay with the person.
 set -euo pipefail
 
-VERSION=0.1.0
+VERSION=0.2.0
 ORG=${HARNESS_ORG:-linuxserver-playground}
+# The org that holds the shared pipeline (workflows, builder, ci, base images) whichever org ORG is.
+PIPELINE_ORG=${HARNESS_PIPELINE_ORG:-linuxserver-playground}
 LABS_ORG=${HARNESS_LABS_ORG:-linuxserverlabs-playground}
-CONTROL=${HARNESS_CONTROL_URL:-https://ci.thelamer.duckdns.org:8443}
-HUB=${HARNESS_HUB_URL:-https://linuxserver-playground.github.io/hub}
-SITE=${HARNESS_SITE_URL:-https://linuxserver-playground.github.io/site}
+LABS_CONTROL=${HARNESS_LABS_CONTROL_URL:-https://labs-ci.thelamer.duckdns.org:8443}
+LABS_HUB=${HARNESS_LABS_HUB_URL:-https://$LABS_ORG.github.io/hub}
+LABS_SITE=${HARNESS_LABS_SITE_URL:-https://$LABS_ORG.github.io/site}
+LABS_PROPOSALS=$LABS_ORG/proposals
+# HARNESS_ORG=$LABS_ORG points snapshot, lookup, control and try at Labs: its control, hub, site and namespace.
+if [[ "$ORG" == "$LABS_ORG" ]]; then
+  CONTROL=${HARNESS_CONTROL_URL:-$LABS_CONTROL}
+  HUB=${HARNESS_HUB_URL:-$LABS_HUB}
+  SITE=${HARNESS_SITE_URL:-$LABS_SITE}
+else
+  CONTROL=${HARNESS_CONTROL_URL:-https://ci.thelamer.duckdns.org:8443}
+  HUB=${HARNESS_HUB_URL:-https://linuxserver-playground.github.io/hub}
+  SITE=${HARNESS_SITE_URL:-https://linuxserver-playground.github.io/site}
+fi
 REGISTRY=ghcr.io/$ORG
-BUILDER_IMAGE=${HARNESS_BUILDER_IMAGE:-$REGISTRY/builder:latest}
+BUILDER_IMAGE=${HARNESS_BUILDER_IMAGE:-ghcr.io/$PIPELINE_ORG/builder:latest}
 SHELLCHECK_IMAGE=koalaman/shellcheck:stable
 CORE=(workspace builder workflows ci hub site control dumper .github docker-mods)
 GENERATED=(README.md AGENTS.md LICENSE .github/FUNDING.yml root/donate.txt .github/workflows/build.yml .github/workflows/pr-report.yml)
@@ -111,7 +130,7 @@ cmd_whoami() {
     fi
   fi
 
-  local login="" role="contributor" state_="none" org_role="" note="" scopes=""
+  local login="" role="contributor" state_="none" org_role="" note="" scopes="" labs_member=false
   if ! have gh; then
     note="gh is not installed: install the GitHub CLI and run 'gh auth login'. Until then you can only read the public data sources."
     role="anonymous"
@@ -136,6 +155,8 @@ cmd_whoami() {
     elif [[ "$out" != *"HTTP 404"* ]]; then
       note="could not read your membership ($out). Treated as a contributor; try ./harness whoami --refresh."
     fi
+    # Labs is its own org with its own members (its admins team): accepting a proposal needs membership there.
+    [[ "$(gh api "user/memberships/orgs/$LABS_ORG" --jq .state 2>/dev/null || true)" == active ]] && labs_member=true
     if [[ "$role" == "member" && "$scopes" != *workflow* ]]; then
       note="your gh token has no 'workflow' scope, so pushes that touch .github/workflows will be refused: run 'gh auth refresh -s workflow'."
     fi
@@ -143,8 +164,10 @@ cmd_whoami() {
 
   jq -n --arg login "$login" --arg role "$role" --arg membership "$state_" --arg org_role "$org_role" \
     --arg scopes "$scopes" --arg note "$note" --arg version "$VERSION" --arg org "$ORG" \
+    --arg labs_org "$LABS_ORG" --argjson labs_member "$labs_member" \
     --arg checked "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson epoch "$(date +%s)" \
     '{login: $login, role: $role, org: $org, membership: $membership, org_role: $org_role, scopes: $scopes,
+      labs_org: $labs_org, labs_member: $labs_member,
       note: $note, version: $version, checked_at: $checked, checked_epoch: $epoch}' >"$profile"
   briefing "$brief"
 }
@@ -159,9 +182,14 @@ briefing() {
   case "$role" in
     member)
       say "Path: member. Read guides/roles/member.md. You may create repos; changes to existing repos go up as a pull request for review."
+      if [[ "$(jq -r '.labs_member // false' "$profile")" == true ]]; then
+        say "Labs: you are a member of $LABS_ORG too: ./harness labs try|accept <issue> for its proposals (guides/playbooks/labs-accept.md)."
+      else
+        say "Labs: you are not a member of $LABS_ORG, so you can try its proposals (./harness labs try) but not accept them."
+      fi
       ;;
     *)
-      say "Path: contributor. Read guides/roles/contributor.md. You work in forks (./harness fork <repo>) and open pull requests; new images are proposed to $LABS_ORG."
+      say "Path: contributor. Read guides/roles/contributor.md. You work in forks (./harness fork <repo>) and open pull requests; new images are proposed to $LABS_ORG (guides/roles/labs-developer.md when it is the person's own app)."
       ;;
   esac
   if [[ "$brief" == true ]]; then
@@ -491,7 +519,8 @@ cmd_try() {
   if [[ "$1" == "--stop" ]]; then
     local filter=harness-try-
     [[ -n "${2:-}" ]] && filter=harness-try-$(image_name "$2")
-    docker ps -aq --filter "name=$filter" | xargs -r docker rm -f >/dev/null
+    # -v: a labs try keeps /config in an anonymous volume; a bind mount's data (try's .harness/try/) stays.
+    docker ps -aq --filter "name=$filter" | xargs -r docker rm -fv >/dev/null
     say "stopped ${2:-every harness-try container}"
     return
   fi
@@ -538,19 +567,27 @@ cmd_try() {
   docker rm -f "harness-try-$name" >/dev/null 2>&1 || true
   docker run "${args[@]}" "$ref" >/dev/null
   say "started harness-try-$name from $ref (data in .harness/try/$name/); waiting for init"
-  local waited=0
-  until docker logs "harness-try-$name" 2>&1 | grep -q '\[ls.io-init\] done\.'; do
-    if [[ "$(docker inspect -f '{{.State.Running}}' "harness-try-$name")" != true ]]; then
-      docker logs --tail 40 "harness-try-$name" 2>&1
-      die "the container exited before init finished"
-    fi
-    (( waited >= 300 )) && { docker logs --tail 40 "harness-try-$name" 2>&1; die "no '[ls.io-init] done.' after 300s"; }
-    sleep 5
-    waited=$((waited + 5))
-  done
-  say "init done after ~${waited}s. Last log lines:"
+  wait_for_init "harness-try-$name" 300
+  say "init done after ~${init_waited}s. Last log lines:"
   docker logs --tail 15 "harness-try-$name" 2>&1
   say "Stop it with ./harness try --stop $name"
+}
+
+# Wait for s6's '[ls.io-init] done.' in a container's log; sets init_waited. Dies, with the log tail, when the
+# container exits first or the timeout passes.
+init_waited=0
+wait_for_init() {
+  local container=$1 timeout=${2:-300}
+  init_waited=0
+  until docker logs "$container" 2>&1 | grep -q '\[ls.io-init\] done\.'; do
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != true ]]; then
+      docker logs --tail 40 "$container" 2>&1
+      die "the container exited before init finished"
+    fi
+    (( init_waited >= timeout )) && { docker logs --tail 40 "$container" 2>&1; die "no '[ls.io-init] done.' after ${timeout}s"; }
+    sleep 5
+    init_waited=$((init_waited + 5))
+  done
 }
 
 builder() {
@@ -809,13 +846,14 @@ cmd_draft() {
   role=$(role)
   mkdir -p "$state/drafts"
   if [[ "$kind" == proposal ]]; then
-    # A new image proposal: the labs org does not exist yet, so it is filed as an issue on harness.
+    # A new image proposal for Labs: the fields of the proposal form in $LABS_PROPOSALS, in the "### <label>"
+    # layout GitHub gives a form submission, so the check workflow and ./harness labs read a draft the same way.
     local name=${2:?usage: ./harness draft proposal <name>}
     name=$(image_name "$name")
     out=$state/drafts/proposal-$name.md
-    sed -e "s|TODO <name>|$name|" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" "$here/templates/proposal-image.md" >"$out"
-    say "<!-- file it with: gh issue create -R $ORG/harness --title \"Proposal: $name\" --body-file $out  (until the Labs proposals repository exists in $LABS_ORG) -->" >>"$out"
+    sed -e "s|{{name}}|$name|g" -e "s|{{login}}|$login|g" -e "s|{{version}}|$VERSION|g" "$here/templates/proposal-image.md" >"$out"
     say "draft: ${out#"$here"/}"
+    say "Fill every TODO, then ./harness labs form $name turns it into a prefilled link to the proposal form (the way to file it)."
     return
   fi
   repo=$(resolve_repo "${2:?usage: ./harness draft $kind <repo>}")
@@ -886,7 +924,12 @@ cmd_allow() {
   local action=${1:-} repo=${2:-} minutes=${3:-30}
   [[ "$action" =~ ^(push|force-push|tag|delete)$ && -n "$repo" ]] || die "usage: ./harness allow push|force-push|tag|delete <repo> [minutes]"
   [[ "$(role)" == member ]] || die "only members can grant this; on the contributor path, ask a maintainer in your PR or issue"
-  [[ "$repo" == "*" ]] || repo=$(resolve_repo "$repo")
+  # A Labs repository is named as $LABS_ORG/<repo>; grants are keyed by the repo name, as the guard reads them.
+  if [[ "$repo" == "$LABS_ORG/"* ]]; then
+    repo=${repo#"$LABS_ORG"/}
+  elif [[ "$repo" != "*" ]]; then
+    repo=$(resolve_repo "$repo")
+  fi
   local file=$state/allow.json until
   until=$(( $(date +%s) + minutes * 60 ))
   [[ -f "$file" ]] || echo '{}' >"$file"
@@ -895,9 +938,303 @@ cmd_allow() {
   say "allowed: $action on $repo for $minutes minutes (the guard hook lets it through until then)"
 }
 
+# ---------------------------------------------------------------------------------------------------- labs
+
+# LinuxServer Labs ($LABS_ORG): proposals become images through these. guides/playbooks/labs-image.md (the
+# developer's side) and labs-accept.md (a member's) say when to use each. They read GitHub and write under
+# .harness/labs/ only: nothing here creates a repository, pushes, comments or labels.
+labs_py() { python3 "$here/scripts/labs.py" "$@"; }
+
+cmd_labs() {
+  local sub=${1:-}
+  (( $# )) && shift
+  case "$sub" in
+    form) labs_form "$@" ;;
+    scaffold) labs_scaffold "${1:?usage: ./harness labs scaffold <issue>}" ;;
+    try) labs_try "$@" ;;
+    accept) labs_accept "$@" ;;
+    *) die "usage: ./harness labs form <name> | scaffold <issue> | try <issue> [--fresh] | try --stop <name> | accept <issue> [--fresh]" ;;
+  esac
+}
+
+# The filled proposal draft as a prefilled link to the web form, and a clean body for gh as the fallback.
+labs_form() {
+  need python3
+  local name draft
+  name=$(image_name "${1:?usage: ./harness labs form <name>}")
+  draft=$state/drafts/proposal-$name.md
+  [[ -f "$draft" ]] || die "no draft: ./harness draft proposal $name first"
+  if grep -q 'TODO' "$draft"; then
+    warn "the draft still has TODOs: $(grep -c TODO "$draft") lines. Fill them (or answer _No response_ for an optional field) first."
+  fi
+  labs_py form --draft "$draft" --repo "$LABS_PROPOSALS" --body "$state/drafts/proposal-$name.body.md"
+}
+
+# Fetch a proposal and everything the scaffold needs, then write the image repo into .harness/labs/<name>/ and
+# render its generated files with builder, as a Labs repository. Sets labs_dir and labs_name.
+labs_dir="" labs_name=""
+labs_scaffold() {
+  need gh jq python3 docker
+  local number=${1#\#} tmp parsed upstream host slug
+  [[ "$number" =~ ^[0-9]+$ ]] || die "a proposal is an issue number in $LABS_PROPOSALS"
+  tmp=$(mktemp -d)
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp'" RETURN
+  gh issue view "$number" -R "$LABS_PROPOSALS" --json number,title,body,author,labels,url,state >"$tmp/issue.json" ||
+    die "cannot read $LABS_PROPOSALS#$number"
+  parsed=$(labs_py parse --issue "$tmp/issue.json") || die "$LABS_PROPOSALS#$number is not a proposal the scaffold can read"
+  labs_name=$(jq -r '.name' <<<"$parsed")
+  [[ "$labs_name" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || die "the proposal's image name ('$labs_name') is not a valid name"
+  upstream=$(jq -r '.answers.upstream_repo // ""' <<<"$parsed")
+  host=$(sed -E 's#^(https?://)?(www\.)?([^/]+)/.*#\3#' <<<"$upstream" | tr '[:upper:]' '[:lower:]')
+  slug=$(sed -E 's#^(https?://)?[^/]+/([^/]+)/([^/#?]+).*#\2/\3#; s#\.git$##' <<<"$upstream")
+  echo '{}' >"$tmp/repo.json"
+  echo '{}' >"$tmp/release.json"
+  case "$host" in
+    github.com)
+      gh api "repos/$slug" >"$tmp/repo.json" 2>/dev/null || warn "cannot read the upstream repository $slug"
+      gh api "repos/$slug/releases/latest" >"$tmp/release.json" 2>/dev/null || warn "$slug has no latest stable release on GitHub"
+      ;;
+    codeberg.org)
+      fetch "https://codeberg.org/api/v1/repos/$slug" >"$tmp/repo.json" 2>/dev/null || warn "cannot read $upstream"
+      fetch "https://codeberg.org/api/v1/repos/$slug/releases/latest" >"$tmp/release.json" 2>/dev/null || warn "no latest release on $upstream"
+      ;;
+    *) warn "the upstream is on $host: the scaffold cannot read its releases, so the version source is left to you" ;;
+  esac
+  # A developer's own repository made from docker-template ("Working repository") is the starting point when the
+  # proposal names one: its image.yml, Dockerfiles and root/ instead of a generated image. It is cloned, never run.
+  local working working_args=()
+  working=$(jq -r '.answers.working_repo // ""' <<<"$parsed" | tr -d '`' | sed 's/[[:space:]]*$//')
+  if [[ -n "$working" ]]; then
+    [[ "$working" =~ ^https://[A-Za-z0-9.-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/?$ ]] || die "the working repository is not an https repository URL: $working"
+    if GIT_TERMINAL_PROMPT=0 git clone --quiet --depth 1 -- "${working%/}" "$tmp/working" 2>/dev/null; then
+      working_args=(--working "$tmp/working")
+      say "  starting from the working repository $working"
+    else
+      warn "cannot clone the working repository $working: generating the image from the form instead"
+    fi
+  fi
+  labs_dir=$state/labs/$labs_name
+  # A new scaffold replaces the old one; the notes of a trial of the same proposal are kept for labs accept.
+  [[ -f "$labs_dir/.proposal/try.md" ]] && grep -q "labs try $number\b" "$labs_dir/.proposal/try.md" && cp "$labs_dir/.proposal/try.md" "$tmp/try.md"
+  rm -rf "$labs_dir"
+  mkdir -p "$labs_dir/.proposal"
+  [[ -f "$tmp/try.md" ]] && mv "$tmp/try.md" "$labs_dir/.proposal/try.md"
+  cp "$tmp"/*.json "$labs_dir/.proposal/"
+  labs_py scaffold --issue "$tmp/issue.json" --repo "$tmp/repo.json" --release "$tmp/release.json" \
+    --out "$labs_dir" --member "$(jq -r '.login // ""' "$profile" 2>/dev/null || true)" "${working_args[@]}" >/dev/null ||
+    die "the scaffold failed"
+  say "scaffold of $LABS_PROPOSALS#$number ($(jq -r .title "$tmp/issue.json")) in .harness/labs/$labs_name/"
+  labs_render
+}
+
+# try and accept work on the scaffold already there for the issue, so a member's fixes to it are kept; --fresh
+# (or no scaffold yet) writes it again from the issue.
+labs_use() {
+  local number=${1#\#} fresh=${2:-} found=""
+  [[ "$number" =~ ^[0-9]+$ ]] || die "a proposal is an issue number in $LABS_PROPOSALS"
+  if [[ "$fresh" != --fresh ]]; then
+    found=$( (grep -l "\"number\": $number," "$state"/labs/*/.proposal/scaffold.json 2>/dev/null || true) | head -n1)
+  fi
+  if [[ -z "$found" ]]; then
+    labs_scaffold "$number"
+    return
+  fi
+  labs_dir=$(dirname "$(dirname "$found")")
+  labs_name=$(basename "$labs_dir")
+  say "using the scaffold of $LABS_PROPOSALS#$number in .harness/labs/$labs_name/ with your edits (--fresh writes it again from the issue)"
+  labs_render
+}
+
+# The generated files a Labs repository gets, rendered as the live build would (its org, site and hub), then
+# builder check with its Labs profile, then what is left to do.
+labs_render() {
+  local log=$labs_dir/.proposal/builder.log
+  docker pull --quiet "$BUILDER_IMAGE" >/dev/null
+  if labs_builder "$labs_dir" render >"$log" 2>&1; then
+    say "  rendered: README.md, AGENTS.md, LICENSE and the workflows (builder render, as $LABS_ORG/docker-$labs_name)"
+  else
+    sed 's/^/  /' "$log"
+    warn "builder render failed: fix image.yml in .harness/labs/$labs_name/ and run it again"
+  fi
+  if labs_builder "$labs_dir" check --drift warn >"$log" 2>&1; then
+    say "  builder check (Labs profile): ok"
+    echo ok >"$labs_dir/.proposal/check.txt"
+  else
+    sed 's/^/  /' "$log"
+    cp "$log" "$labs_dir/.proposal/check.txt"
+    warn "builder check failed: the findings above are in .harness/labs/$labs_name/.proposal/check.txt"
+  fi
+  labs_report "$labs_dir"
+}
+
+labs_builder() {
+  local dir=$1
+  shift
+  docker run --rm -v "$dir":/repo --user "$(id -u):$(id -g)" \
+    -e GITHUB_REPOSITORY="$LABS_ORG/docker-$labs_name" -e BUILDER_SITE_URL="$LABS_SITE" -e BUILDER_HUB_URL="$LABS_HUB" \
+    "$BUILDER_IMAGE" "$@"
+}
+
+# What the scaffold could not tell from the proposal: said out loud, never guessed silently.
+labs_report() {
+  local meta=$1/.proposal/scaffold.json
+  jq -r '"  upstream: \(.slug) at \(.tag // "?") (\(.source_type // "no typed source")); base \(.base) (\(.base_reason // "")); \(.platforms | join(", ")); maintainers \(.maintainers | join(", "))",
+    (.assets | to_entries[] | "  asset \(.key): \(if .value.name != "" then .value.name else "NOT FOUND (" + .value.given + ")" end) -> require_assets \(.value.regex)"),
+    "  start command: \(.command)"' "$meta"
+  jq -r '.problems[] | "  proposal: \(.)"' "$meta"
+  local todos
+  todos=$(jq -r '.todos | length' "$meta")
+  if (( todos > 0 )); then
+    say "  TODO before this can be accepted ($todos; also marked TODO in the files):"
+    jq -r '.todos[] | "    - \(.)"' "$meta"
+  else
+    say "  nothing left marked TODO by the scaffold"
+  fi
+}
+
+labs_try() {
+  need docker jq curl
+  if [[ "${1:-}" == "--stop" ]]; then
+    cmd_try --stop "${2:?usage: ./harness labs try --stop <name>}"
+    docker rmi "harness-labs/$(image_name "$2"):try" >/dev/null 2>&1 || true
+    return
+  fi
+  labs_use "${1:?usage: ./harness labs try <issue> [--fresh] | --stop <name>}" "${2:-}"
+  local name=$labs_name dir=$labs_dir meta ref dockerfile=Dockerfile container
+  meta=$dir/.proposal/scaffold.json
+  container=harness-try-$name
+  ref=harness-labs/$name:try
+  if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then
+    [[ -f "$dir/Dockerfile.aarch64" ]] || die "the proposal has no arm64 asset: try it on an amd64 machine"
+    dockerfile=Dockerfile.aarch64
+  fi
+  say "building $ref ($dockerfile, --pull; a selkies base is a large first pull)"
+  docker build --pull -f "$dir/$dockerfile" -t "$ref" "$dir" || die "the build failed: see the TODOs above and the Dockerfile in .harness/labs/$name/"
+  # The sandbox: no host mounts (/config is an anonymous volume, removed with the container), no credentials or
+  # host environment, and ports published on 127.0.0.1 only.
+  # The previous trial goes first, so its ports are free again.
+  docker rm -fv "$container" >/dev/null 2>&1 || true
+  local args=(-d --name "$container" --pids-limit 4096 -e PUID="$(id -u)" -e PGID="$(id -g)" -e TZ=Etc/UTC)
+  local selkies scheme=http urls=()
+  selkies=$(jq -r '.selkies' "$meta")
+  if [[ "$selkies" == true ]]; then
+    args+=(--shm-size=1gb)
+    scheme=https
+  fi
+  local internal host
+  for internal in $(labs_ports "$dir/image.yml"); do
+    host=$internal
+    if (( host < 1024 )) || (ss -ltn 2>/dev/null | grep -q ":$host "); then host=$((18000 + internal % 1000)); fi
+    args+=(-p "127.0.0.1:$host:$internal")
+    urls+=("$internal=$host")
+  done
+  # Variables the proposal gives a value for; anything secret stays out of a proposal anyway.
+  while IFS=$'\t' read -r key value; do
+    [[ -n "$key" && -n "$value" ]] && args+=(-e "$key=$value")
+  done < <(labs_py parse --issue "$dir/.proposal/issue.json" | jq -r '.env[] | "\(.name)\t\(.value)"')
+  docker run "${args[@]}" "$ref" >/dev/null
+  say "started $container (sandboxed: no host mounts, no credentials, localhost only); waiting for init"
+  wait_for_init "$container" 600
+  say "init done after ~${init_waited}s."
+  # The generic smoke test: the web endpoint answers below 500 (ci's rule), retried while the app starts.
+  local web_port web_scheme web_path code="000" waited=0 published=""
+  web_port=$(awk '/^test:/ {t=1; next} /^[^ ]/ {t=0} t && /^    port:/ {print $2; exit}' "$dir/image.yml")
+  web_scheme=$(awk '/^test:/ {t=1; next} /^[^ ]/ {t=0} t && /^    scheme:/ {print $2; exit}' "$dir/image.yml")
+  web_path=$(awk '/^test:/ {t=1; next} /^[^ ]/ {t=0} t && /^    path:/ {print $2; exit}' "$dir/image.yml")
+  for pair in "${urls[@]}"; do [[ "${pair%%=*}" == "$web_port" ]] && published=${pair#*=}; done
+  if [[ -n "$published" ]]; then
+    while (( waited < 120 )); do
+      code=$(curl -ks -o /dev/null -w '%{http_code}' --max-time 10 "${web_scheme:-http}://127.0.0.1:$published${web_path:-/}" || true)
+      [[ "$code" != "000" ]] && break
+      sleep 5
+      waited=$((waited + 5))
+    done
+  fi
+  local verdict
+  if [[ "$code" == "000" ]]; then verdict="FAIL: nothing answered on port $web_port within 120 s after init"
+  elif (( code >= 500 )); then verdict="FAIL: the web endpoint answered $code"
+  else verdict="ok: the web endpoint answered $code"
+  fi
+  say "smoke test: $verdict"
+  # The application itself, not just the base's services: its start command's process.
+  local program process="not checked"
+  program=$(jq -r '.command // "" | split(" ")[0] | split("/")[-1]' "$meta")
+  if [[ -n "$program" ]]; then
+    sleep 10
+    if docker exec "$container" pgrep -f "$program" >/dev/null 2>&1; then process="running ($program)"
+    else process="NOT running: no process matches '$program' (the start command is wrong, or it exited: read the log)"
+    fi
+  fi
+  say "application: $process"
+  say "last log lines:"
+  docker logs --tail 15 "$container" 2>&1 | sed 's/^/  /'
+  say ""
+  say "Open it:"
+  for pair in "${urls[@]}"; do
+    local url_scheme=$scheme
+    [[ "$selkies" == true && "${pair%%=*}" == 3000 ]] && url_scheme=http
+    [[ "${pair%%=*}" == "$web_port" ]] && url_scheme=${web_scheme:-http}
+    say "  ${url_scheme}://localhost:${pair#*=}/  (container port ${pair%%=*})"
+  done
+  [[ "$selkies" == true ]] && say "  (selkies serves a self-signed certificate on 3001: accept the browser's warning)"
+  say "What working looks like, from the proposal:"
+  jq -r '.first_run // "" | split("\n")[] | "  " + .' "$meta"
+  {
+    say "\`./harness labs try $(jq -r .number "$meta")\` on $(date -u +%Y-%m-%d) ($(uname -m), $dockerfile, upstream $(jq -r '.tag // "?"' "$meta")):"
+    say ""
+    say "- builder check (Labs profile): $(head -n1 "$dir/.proposal/check.txt" 2>/dev/null || echo "not run")"
+    say "- build: ok"
+    say "- init: done after ~${init_waited}s"
+    say "- smoke test: $verdict"
+    say "- application: $process"
+    say "- clicked through: TODO (what you checked against the proposal's first-run steps)"
+  } >"$dir/.proposal/try.md"
+  say ""
+  say "Recorded in .harness/labs/$name/.proposal/try.md (labs accept puts it in the pull request; add what you clicked)."
+  say "Stop and clean up: ./harness labs try --stop $name   (removes the container, its /config volume and the image)"
+}
+
+# The internal TCP ports image.yml publishes (runtime.ports).
+labs_ports() {
+  awk '/^runtime:/ {r=1; next} /^[^ ]/ {r=0} r && /^  ports:/ {p=1; next} r && /^  [a-z]/ {p=0}
+       r && p && /internal:/ {gsub(/[^0-9\/a-z]/, "", $NF); sub(/\/tcp$/, "", $NF); if ($NF !~ /udp/) print $NF}' "$1" |
+    sed 's/internal//'
+}
+
+labs_accept() {
+  need gh jq python3
+  local number=${1:?usage: ./harness labs accept <issue> [--fresh]}
+  number=${number#\#}
+  [[ "$(role)" == member ]] || die "accepting a proposal is for members: on the contributor path, the proposal itself is your part (guides/roles/labs-developer.md)"
+  [[ "$(jq -r '.labs_member // false' "$profile")" == true ]] ||
+    die "you are not a member of $LABS_ORG (./harness whoami --refresh if you were just added): ask a Labs admin to accept it"
+  labs_use "$number" "${2:-}"
+  local name=$labs_name dir=$labs_dir
+  if gh repo view "$LABS_ORG/docker-$name" --json name >/dev/null 2>&1; then
+    warn "$LABS_ORG/docker-$name already exists: accept.sh would fail when it creates it. Work on that repository instead."
+  fi
+  # Unique across Labs, the main org and live linuxserver, so graduation never collides (reads only).
+  gh repo view "$ORG/docker-$name" --json name >/dev/null 2>&1 && warn "$ORG/docker-$name exists: the name collides with the main org"
+  gh repo view "linuxserver/docker-$name" --json name >/dev/null 2>&1 && warn "linuxserver/docker-$name exists: the name collides with live LinuxServer"
+  [[ -f "$dir/.proposal/try.md" ]] || warn "no trial recorded: run ./harness labs try $number and look at it before accepting"
+  if [[ "$(jq -r '[.labels[].name] | index("meets-bar") != null' "$dir/.proposal/issue.json")" != true ]]; then
+    warn "the proposal is not labelled meets-bar: read the check's comment on the issue first"
+  fi
+  labs_py accept --dir "$dir" --member "$(jq -r '.login // ""' "$profile")"
+  say ""
+  say "Prepared, not run. Read these, then run them yourself (or let the agent, once you say so):"
+  say "  .harness/labs/$name/accept.sh        the repo, with docker-template's pending branch as main (proposal linked, build.yml),"
+  say "                                       Pages, labs-pending, the image on 'initial' and its pull request, the issue accepted"
+  say "  .harness/labs/$name/after-merge.sh   once the pull request merges: remove labs-pending, dispatch the first build"
+  say "  .harness/labs/$name/.proposal/pr-body.md   the pull request's description (fill its AI-use line and trial notes)"
+  say ""
+  sed 's/^/    /' "$dir/accept.sh"
+}
+
 # ---------------------------------------------------------------------------------------------------- main
 
-usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd=${1:-help}
@@ -920,6 +1257,7 @@ main() {
     validate) cmd_validate "$@" ;;
     draft) need jq; cmd_draft "$@" ;;
     allow) cmd_allow "$@" ;;
+    labs) cmd_labs "$@" ;;
     version | --version) say "harness $VERSION" ;;
     help | -h | --help) usage ;;
     *) usage; exit 2 ;;

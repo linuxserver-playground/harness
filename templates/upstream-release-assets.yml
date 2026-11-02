@@ -1,0 +1,91 @@
+# Release assets per architecture, for YOUR application's repository (not a LinuxServer one).
+#
+# Copy this to .github/workflows/release.yml in your project. Pushing a version tag (v1.2.3) then builds your
+# application on native amd64 and arm64 runners, packs each build as a tarball with a name that never changes
+# from release to release, and publishes one GitHub release with every asset and a checksum file at once. A
+# container image (LinuxServer Labs, or anyone's) can then install a release with one download:
+#
+#   https://github.com/<org>/<app>/releases/download/v1.2.3/<app>-linux-amd64.tar.gz
+#
+# Adapt the three marked places: APP, the toolchain setup and the build command. Everything else is generic.
+# Guide: guides/playbooks/labs-image.md in https://github.com/linuxserver-playground/harness
+
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]  # stable versions only: a tag with a suffix (v1.2.3-rc1) does not match
+
+permissions:
+  contents: write  # to create the release; nothing else
+
+env:
+  APP: myapp  # ADAPT: your application's name, used in every asset name
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm  # GitHub's native arm64 runner, free for public repositories
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # ADAPT: set up your toolchain. Examples:
+      #   - uses: actions/setup-go@v6         with: { go-version-file: go.mod }
+      #   - uses: actions/setup-node@v5       with: { node-version: 24 }
+      #   - uses: dtolnay/rust-toolchain@stable
+      #   - uses: actions/setup-python@v6     with: { python-version: "3.13" }
+
+      - name: Build
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # ADAPT: build into dist/$APP/ everything the application needs at runtime: the binary or the built
+          # web assets, and any default config. Examples:
+          #   go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${APP}/${APP}" .
+          #   cargo build --release --locked && install -D "target/release/${APP}" "dist/${APP}/${APP}"
+          #   npm ci && npm run build && cp -r build package.json package-lock.json "dist/${APP}/"
+          mkdir -p "dist/${APP}"
+          echo "replace this step with your build" >&2
+          exit 1
+
+      - name: Pack
+        run: |
+          set -euo pipefail
+          # One top-level directory, and no version in the file name: the name stays the same in every release,
+          # so a downloader only swaps the tag in the URL.
+          tar -C dist -czf "${APP}-linux-${{ matrix.arch }}.tar.gz" "${APP}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP }}-linux-${{ matrix.arch }}
+          path: ${{ env.APP }}-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish the release with every asset at once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd assets
+          sha256sum -- * > SHA256SUMS
+          # Created complete, never empty: anything watching for new releases sees the assets as soon as it sees
+          # the release. --verify-tag refuses to invent a tag that was not pushed.
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --generate-notes -- *

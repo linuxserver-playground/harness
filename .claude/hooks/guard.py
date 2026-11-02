@@ -9,11 +9,14 @@ GitHub's permissions are the enforcement. Anything it cannot parse is let throug
 Rules (guides/rules.md explains them):
 - everyone: no writes to the real linuxserver org; no printing tokens; no new secrets through the agent;
   no --mirror or --all pushes.
-- contributors: no pushes to linuxserver-playground remotes (fork first), no workflow runs, reruns, labels,
-  releases, repo creation in the org or deletions.
+- contributors: no pushes to linuxserver-playground or Labs (linuxserverlabs-playground) remotes (fork first), no
+  workflow runs, reruns, labels, releases, repo creation in either org or deletions.
 - members: pushes to an existing repo's default or live branch, force pushes there, tag moves, repo and
   package deletion need `./harness allow <action> <repo>` first (the person approves that command), because
-  changes to existing repos go up as a pull request. A first push to a brand-new repo is free.
+  changes to existing repos go up as a pull request. A first push to a brand-new repo is free, and so is a push
+  to the placeholder default branch of a Labs repo pending approval (no image.yml there yet), which is how
+  `./harness labs accept` links the proposal.
+- Labs is its own org with its own members: the member rules apply there to members of the Labs org.
 """
 
 from __future__ import annotations
@@ -49,7 +52,11 @@ def load_json(path: Path) -> dict:
 PROFILE = load_json(STATE / "profile.json")
 ROLE = PROFILE.get("role", "unknown")
 ORG = PROFILE.get("org") or os.environ.get("HARNESS_ORG") or "linuxserver-playground"
+LABS_ORG = PROFILE.get("labs_org") or os.environ.get("HARNESS_LABS_ORG") or "linuxserverlabs-playground"
 MEMBER = ROLE == "member"
+# A profile written before the harness knew Labs has no labs_member: fall back to the main org's role.
+LABS_MEMBER = bool(PROFILE.get("labs_member", MEMBER))
+ORGS = {ORG: MEMBER, LABS_ORG: LABS_MEMBER}
 
 
 def allowed(action: str, repo: str) -> bool:
@@ -110,9 +117,16 @@ def check_push(cwd: str, args: list[str]) -> None:
     owner, repo = match.group(1), match.group(2)
     if owner == "linuxserver":
         block("The real linuxserver org is read-only from here: no pushes, PRs, issues or comments there.")
-    if owner != ORG:
+    if owner not in ORGS:
         return  # your fork, or another org: GitHub decides
-    if not MEMBER:
+    labs = owner == LABS_ORG and owner != ORG
+    if not ORGS[owner]:
+        if labs:
+            block(
+                f"You are not a member of {LABS_ORG}, so you cannot push to {owner}/{repo}. Fork it "
+                f"(gh repo fork {owner}/{repo} --remote), push your branch to the fork and open the pull request from "
+                "there: outside developers contribute to Labs images by pull request (guides/roles/labs-developer.md)."
+            )
         block(
             f"You are on the contributor path, so you cannot push to {ORG}/{repo}. Fork it first "
             f"(./harness fork {repo}), push your branch to origin (your fork), then draft the pull request with "
@@ -121,7 +135,7 @@ def check_push(cwd: str, args: list[str]) -> None:
     refspecs = positional[1:] or ([current] if current else [])
     if "--tags" in flags:
         if not allowed("tag", repo):
-            block(f"Pushing tags to {ORG}/{repo} needs the person's go-ahead: ./harness allow tag {repo}.")
+            block(f"Pushing tags to {owner}/{repo} needs the person's go-ahead: ./harness allow tag {repo}.")
         return
     remote_head = git(cwd, "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD").split("/", 1)[-1]
     for spec in refspecs:
@@ -133,7 +147,7 @@ def check_push(cwd: str, args: list[str]) -> None:
             tag = dst.removeprefix("refs/tags/")
             if spec_force and not allowed("tag", repo):
                 block(
-                    f"Moving the tag {tag} on {ORG}/{repo} is a release step (release-workflows in guides/playbooks/fleet-ops.md). "
+                    f"Moving the tag {tag} on {owner}/{repo} is a release step (release-workflows in guides/playbooks/fleet-ops.md). "
                     f"The person approves it with ./harness allow tag {repo}, then the push goes through."
                 )
             continue
@@ -144,10 +158,14 @@ def check_push(cwd: str, args: list[str]) -> None:
         exists = git(cwd, "ls-remote", "--heads", remote, dst)
         if not exists and not delete:
             continue  # the first push of a brand-new repo's default branch
+        if labs and repo != "docker-template" and dst == remote_head and not spec_force and not delete and not git(
+            cwd, "cat-file", "-t", f"refs/remotes/{remote}/{dst}:image.yml"
+        ):
+            continue  # a pending Labs repo's placeholder main (no image.yml yet): labs accept links the proposal
         action = "force-push" if (spec_force or delete) else "push"
         if not allowed(action, repo):
             block(
-                f"{dst} is {'the default' if dst == remote_head else 'a live'} branch of {ORG}/{repo}. Changes to an "
+                f"{dst} is {'the default' if dst == remote_head else 'a live'} branch of {owner}/{repo}. Changes to an "
                 f"existing repo go up as a pull request: push a topic branch (git push -u {remote} <topic>) and run "
                 f"./harness draft pr {repo}. If a playbook step really needs this push (a new repo's scaffold, "
                 f"release-workflows), the person approves it with ./harness allow {action} {repo}."
@@ -193,7 +211,20 @@ def check_gh(command: str, seg: list[str]) -> None:
         if not allowed("delete", name or "*"):
             block(f"Deletion is the last of the remove-image steps (guides/playbooks/fleet-ops.md). The person approves it with "
                   f"./harness allow delete {name or '<repo>'} after checking nothing depends on it.")
-    if MEMBER:
+    owner = target.split("/")[0] if "/" in target else ""
+    create = sub == ["repo", "create"]
+    if create:
+        name = next((t for t in seg[3:] if not t.startswith("-")), "")
+        org_flag = next((seg[i + 1] for i, t in enumerate(seg[:-1]) if t == "--org"), "")
+        owner = name.split("/")[0] if "/" in name else org_flag
+    if owner == LABS_ORG and owner != ORG:
+        if LABS_MEMBER:
+            return
+        if create:
+            block(f"Only members of {LABS_ORG} create its repositories, from an accepted proposal (./harness labs "
+                  f"accept). Propose your app instead: guides/playbooks/labs-image.md. A scaffold, if you want one, "
+                  "goes in your own account.")
+    elif MEMBER:
         return
     member_only = {
         ("workflow", "run"), ("workflow", "enable"), ("workflow", "disable"), ("run", "rerun"),
@@ -201,9 +232,9 @@ def check_gh(command: str, seg: list[str]) -> None:
         ("release", "create"), ("release", "edit"), ("release", "delete"), ("cache", "delete"),
     }
     if tuple(sub) in member_only:
-        block(f"'gh {' '.join(sub)}' needs write access to {ORG}, which members have. On the contributor path, "
+        block(f"'gh {' '.join(sub)}' needs write access to {owner or ORG}, which members have. On the contributor path, "
               "ask for it in your pull request or issue; a maintainer will run it.")
-    if sub == ["repo", "create"]:
+    if create:
         name = next((t for t in seg[3:] if not t.startswith("-")), "")
         if name.startswith(f"{ORG}/") or "--org" in seg:
             block(f"Contributors cannot create repos in {ORG}. New images start as a proposal "

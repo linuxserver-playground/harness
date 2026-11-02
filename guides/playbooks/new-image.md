@@ -4,7 +4,7 @@
 
 - "Add an image for Mealie."
 - "Convert linuxserver/docker-foo into the playground."
-- "Graduate this labs image."
+- "Graduate this Labs image." (`./harness labs graduate` is planned; until then, these steps by hand)
 
 **Output:** a new repo `linuxserver-playground/docker-<name>` with a placeholder default branch, and one pull
 request per live branch carrying the whole image, for the team to review. Merging releases it.
@@ -14,15 +14,17 @@ request per live branch carrying the whole image, for the team to review. Mergin
 1. **Check for duplicates:**
    - `curl -fsS https://linuxserver-playground.github.io/hub/api/v1/images.json | jq -r '.data.repositories.linuxserver[].name' | grep -i <name>`;
    - `gh repo view linuxserver-playground/docker-<name>`;
-   - the labs org (`gh repo list linuxserver-playground-labs`);
-   - open proposals.
+   - Labs (`gh repo list linuxserverlabs-playground --limit 200`);
+   - Labs proposals (`gh issue list -R linuxserverlabs-playground/proposals --state all --search <name>`).
 2. **Check the name.** It must match the schema's `name` pattern: lowercase, with no `.` or `_` (those wait on
    a maintainer decision).
 3. **Find the source:**
    - **A LinuxServer image to convert:** read `linuxserver/docker-<name>` (read-only) and its live branches
      (`jenkins-vars.yml` `ls_branch` on each; skip any that readme-vars marks deprecated).
      `repos/workspace/docs/conversion-report.md` has worked examples.
-   - **A labs image:** its repo in `linuxserver-playground-labs`.
+   - **A Labs image:** its repo in `linuxserverlabs-playground`. Graduation transfers that repository to the main
+     org (`repos/workspace/docs/labs.md`, "Graduation") rather than creating a new one. A new image for Labs itself
+     is not this playbook: [labs-accept](labs-accept.md).
    - **From scratch:** pick the nearest existing image with the same base and shape (a web app on
      alpine-nginx, a desktop app on selkies…) as the model.
 

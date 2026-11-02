@@ -36,6 +36,19 @@ an image uses the one container name `harness-try-<name>`, so to run the release
 the PR image after the released one) stop the first with `./harness try --stop <name>`; the data directory is
 shared, which is what a comparison wants.
 
+## Try a Labs proposal
+
+```bash
+./harness labs try 12                   # scaffold linuxserverlabs-playground/proposals#12, build amd64, run it sandboxed
+./harness labs try 12 --fresh           # write the scaffold again from the issue (otherwise your edits are kept)
+./harness labs try --stop <name>        # remove the container, its /config volume and the image
+```
+
+Unlike `try`, a Labs trial mounts nothing from the host (`/config` is an anonymous volume), passes none of your
+environment, and publishes its ports on 127.0.0.1 only: the software has not been reviewed. It waits for init (10
+minutes for a desktop app), checks that the web endpoint answers below 500 and that the application's own process
+runs, and records the result in `.harness/labs/<name>/.proposal/try.md` ([labs-accept](playbooks/labs-accept.md)).
+
 ## Compare two builds
 
 - **The hub's diff** for a release, against the one before it:

@@ -1,0 +1,14 @@
+{
+  "number": 1,
+  "title": "Proposal: photocraft",
+  "url": "https://github.com/linuxserverlabs-playground/proposals/issues/1",
+  "author": {
+    "login": "thelamer"
+  },
+  "labels": [
+    {
+      "name": "proposal"
+    }
+  ],
+  "body": "### Image name\n\nphotocraft\n\n### Upstream repository\n\nhttps://github.com/storytold/photocraft\n\n### Project homepage\n\nhttps://getartcraft.com/apps/photocraft\n\n### Licence\n\nApache-2.0\n\n### Latest stable release\n\nhttps://github.com/storytold/photocraft/releases/tag/v0.19.0\n\n### How the image installs it\n\nRelease asset\n\n### amd64 release asset\n\nphotocraft-0.19.0-linux-x86_64.deb\n\n### arm64 release asset\n\nphotocraft-0.19.0-linux-aarch64.deb\n\n### Application type\n\nDesktop application (selkies)\n\n### Runtime and install\n\nRust, a native GUI. The .deb installs `/usr/bin/photocraft` and its icons.\n\n### Web interface port\n\n_No response_\n\n### Where it writes state\n\n~/.config/photocraft and ~/.local/share/photocraft\n\n### Required environment variables\n\n_No response_\n\n### Database\n\nNone needed\n\n### First run\n\nThe editor opens on an empty canvas; File > Open loads an image.\n\n### Screenshot\n\n_No response_\n\n### Maintainers\n\nthelamer\n\n### The Labs bar\n\n- [X] The upstream repository is owned by an organisation, not a personal account\n- [X] It has an approved open-source licence\n- [X] It cuts stable, versioned releases\n- [X] Release asset names stay the same from release to release\n- [X] It works with just this container (no companion containers)\n- [X] It needs no account with a paid vendor service to work\n- [X] Any telemetry is disclosed and can be turned off\n"
+}

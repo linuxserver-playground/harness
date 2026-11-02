@@ -63,6 +63,24 @@ them after merge. The one exception is a new repo's first PR, which carries ever
 - When you must rewrite a reference to the playground, add a row to
   `repos/workspace/docs/playground-references.md`, so it can be swapped back at the cutover.
 
+## LinuxServer Labs
+
+Labs (`linuxserverlabs-playground`) keeps the main org's process; only the bar for the software is lower.
+
+- **Outside developers only open pull requests,** from forks, even to the image of their own app. They never get
+  push access. `maintainers` in `image.yml` is credit and who gets mentioned, never access.
+- **Members of the Labs org create repositories, merge and decide what goes live.** Labs is its own org with its own
+  members; being a member of the main org does not make you one.
+- **A new Labs image starts as a proposal** through the form in `linuxserverlabs-playground/proposals`, and becomes a
+  repository only when a Labs member has tried it and runs `accept.sh` ([labs-accept](playbooks/labs-accept.md)).
+  The harness prepares those commands; it never runs them.
+- **The bar** (`repos/workspace/docs/labs.md`): an upstream owned by an organisation, never a personal account,
+  with no exceptions; an approved open-source licence; stable versioned releases with stable asset names (or a
+  source release); a self-hosted web app (or a selkies desktop app) on a playground base image; works with just
+  its container (an embedded database option, no companions); no paywalled vendor service at its core; telemetry
+  disclosed and optional; a name free in Labs, the main org and live LinuxServer. amd64 only is allowed.
+- **Docker images only, GHCR only:** no Labs mods, PRoot Apps or store templates, and no other registries.
+
 ## Secrets
 
 - No change needs a secret: every test runs against fixtures and mocks.

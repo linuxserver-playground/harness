@@ -1,0 +1,14 @@
+{
+  "number": 7,
+  "title": "Proposal: notely",
+  "url": "https://github.com/linuxserverlabs-playground/proposals/issues/7",
+  "author": {
+    "login": "notely-dev"
+  },
+  "labels": [
+    {
+      "name": "proposal"
+    }
+  ],
+  "body": "### Image name\n\nnotely\n\n### Upstream repository\n\nhttps://github.com/notely-org/notely\n\n### Project homepage\n\n_No response_\n\n### Licence\n\nAGPL-3.0-only\n\n### Latest stable release\n\nhttps://github.com/notely-org/notely/releases/tag/v2.4.1\n\n### How the image installs it\n\nRelease asset\n\n### amd64 release asset\n\nnotely_2.4.1_linux_amd64.tar.gz\n\n### arm64 release asset\n\n_No response_\n\n### Application type\n\nWeb application\n\n### Runtime and install\n\nA single Go binary in a tarball. Start it with `/app/notely/notely serve --data /config --port 8080`.\n\n### Web interface port\n\n8080\n\n### Where it writes state\n\n./data next to the binary by default; --data moves it.\n\n### Required environment variables\n\n- NOTELY_SECRET=changeme - signs session cookies\n- `NOTELY_BASE_URL`: the public URL behind a proxy\nPUID=1000\n\n### Database\n\nEmbedded (SQLite or similar)\n\n### First run\n\nA setup page asks for the first admin account, then shows an empty notebook.\n\n### Screenshot\n\n_No response_\n\n### Maintainers\n\nnotely-dev, @someone\n\n### The Labs bar\n\n- [X] The upstream repository is owned by an organisation, not a personal account\n- [X] It has an approved open-source licence\n- [X] It cuts stable, versioned releases\n- [X] Release asset names stay the same from release to release\n- [X] It works with just this container (no companion containers)\n- [ ] It needs no account with a paid vendor service to work\n- [X] Any telemetry is disclosed and can be turned off\n"
+}

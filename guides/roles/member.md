@@ -18,6 +18,10 @@ LinuxServer's own tiers (developers, support…) come with the move to the real 
   workflows, ci, builder: work on a topic branch in the org repo (no fork needed), push it, and draft the PR
   for someone else to review. Cross-repo changes run as a change train
   ([contract-change](../playbooks/contract-change.md)).
+- **Runs LinuxServer Labs, when a member of `linuxserverlabs-playground` too.** Tries proposals in a sandbox and
+  elevates the good ones to a pending repository and its first pull request
+  ([labs-accept](../playbooks/labs-accept.md)). `./harness whoami` says whether you are a Labs member; Labs is its
+  own org with its own members (the Labs admins team).
 - **Operates the fleet.** Rerun, dispatch, skip flags, a hub refresh, releasing workflows, removing an image
   ([fleet-ops](../playbooks/fleet-ops.md)).
 - **Posts reviews and labels.** Only after reading your draft.

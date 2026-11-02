@@ -19,7 +19,8 @@ templates for what you write, and hooks that keep each role on its own path.
 1. **Run `./harness whoami`.** The SessionStart hook normally does this and puts a briefing in your context;
    when no briefing is there (an agent started without hooks), run it yourself. It says whether the person is a **member** of the org or a **contributor**, and it names
    their role guide. Read that guide: [guides/roles/member.md](guides/roles/member.md) or
-   [guides/roles/contributor.md](guides/roles/contributor.md).
+   [guides/roles/contributor.md](guides/roles/contributor.md). A person who wants their own application packaged
+   is a contributor on the Labs path too: [guides/roles/labs-developer.md](guides/roles/labs-developer.md).
 2. **Make sure the repos you need are cloned.** `./harness core` clones the infrastructure repos and the
    workspace into `repos/`. `./harness get <repo>` clones any other one, and `./harness sync` updates them all.
    Others push all day, so sync before you read code.
@@ -45,7 +46,9 @@ The person may be new to working with an agent. When they seem unsure what to as
 | Report a bug | [report-bug](guides/playbooks/report-bug.md) | yes | yes |
 | Fix or improve an image | [fix-image](guides/playbooks/fix-image.md) | branch + PR | fork + PR |
 | Change or add a mod | [mod](guides/playbooks/mod.md) | branch + PR | fork + PR, or an issue for a new mod |
-| Add a new image | [new-image](guides/playbooks/new-image.md) | new repo + PR | [propose-image](guides/playbooks/propose-image.md) |
+| Add a new image | [new-image](guides/playbooks/new-image.md) | new repo + PR | [propose-image](guides/playbooks/propose-image.md): a Labs proposal |
+| Get their own app published: make it easy to self-host, release assets, a Labs proposal | [labs-image](guides/playbooks/labs-image.md) | yes | yes ([labs-developer](guides/roles/labs-developer.md)) |
+| Try a Labs proposal, accept it, finish it after merge | [labs-accept](guides/playbooks/labs-accept.md) | yes; accepting needs Labs membership | try only |
 | Write or fix docs; write a blog post | [docs-and-blog](guides/playbooks/docs-and-blog.md) | docs and blog | docs only |
 | Change the site, hub, control, workflows, ci or builder | [infra-change](guides/playbooks/infra-change.md) | PR | bug-fix PR, or an issue |
 | Add or change a field, a data shape or an API (crosses repos) | [contract-change](guides/playbooks/contract-change.md) | change train | an issue |
@@ -72,7 +75,8 @@ The person may be new to working with an agent. When they seem unsure what to as
 - **You draft; the person files.** You never open an issue or a pull request, post a comment or review, or
   merge on your own. Write the text with `./harness draft …` (`issue` for a bug, `request` for a feature,
   a topic or a removal, `proposal` for a new image, `pr`, `review`; or into `.harness/drafts/`), show it, and run
-  the `gh … create` command only when the person says so. The org's CONTRIBUTING forbids fully autonomous
+  the `gh … create` command only when the person says so. A Labs proposal is filed by the person through the web
+  form (`./harness labs form <name>`), and `./harness labs accept` only writes `accept.sh` for the person to run. The org's CONTRIBUTING forbids fully autonomous
   agents from opening PRs or issues.
 - **Evidence over assertion.** Link the build page, the run, the line of code. Paste the validation output
   `./harness validate` wrote. "Not run" is an acceptable answer; claiming a run that did not happen is not.
@@ -107,5 +111,6 @@ Validate a change to this repo with these, then make sure the playbook table abo
 
 ```bash
 docker run --rm -v "$PWD":/mnt -w /mnt koalaman/shellcheck:stable -x harness .claude/hooks/session-start.sh
-python3 -m py_compile .claude/hooks/guard.py
+python3 -m py_compile .claude/hooks/guard.py scripts/labs.py
+python3 -m unittest discover -s tests
 ```

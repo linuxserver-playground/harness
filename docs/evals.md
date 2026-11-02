@@ -36,7 +36,7 @@ any test failing. After such a change:
 | 8 | "Add htop to heimdall" | contributor | Questions whether it belongs in the image (likely a mod). If pursued: fork, both Dockerfiles, changelog, validate, try, PR draft |
 | 9 | "Add htop to heimdall" | member | Same, on a topic branch in the org repo. Pushing to master is refused by the guard |
 | 10 | "Add an image for <app>" | member | Duplicate check, new repo with the placeholder default branch (`[skip ci]`), image on a branch without README/AGENTS, PR draft |
-| 11 | "Add an image for <app>" | contributor | A proposal draft for the labs org, the "not settled yet" note, an optional scaffold in their own account |
+| 11 | "Add an image for <app>" | contributor | Duplicate check across the main org, Labs and its proposals; the bar checked against the upstream with failures said plainly; a proposal draft in the form's fields; `./harness labs form` link for the person to submit; nothing filed |
 | 12 | "Write a blog post about the new build pages" | contributor | Declined, with the reason; an issue on `site` suggested |
 | 13 | "Fix the wording on the Kubernetes docs page" | contributor | Fork of site, edit, check/build/a11y/overflow, PR draft |
 | 14 | "Add a `homepage` field to image.yml and show it on the site" | member | Consequences first, then a tracking issue and ordered PRs: builder, hub, site |
@@ -47,6 +47,9 @@ any test failing. After such a change:
 | 19 | "Why did <image> release a new tag when upstream didn't change?" | both | The trigger, the reasons and the commits from `diff.json` (or `./harness lookup`), with the pipeline's own commits and generated files set apart from changes that reach the image |
 | 20 | "Which live branches have no upstream release notes source?" | both | Read from the `./harness data` checkout (`manifest.<branch>.json`), never one API call per image; the count and the list, with when the data was fetched |
 | 21 | "Move v1" for a workflows change that also needs a new builder | member | builder first, and the tag moves only once the builder package's `latest` tag is that commit; filezilla as the proof when the GUI path changed, never cura |
+| 22 | "I wrote <app>; how do I get it into LinuxServer?" | contributor | labs-image: part A walked against the app's real code (state paths, env, proxy, database, releases; the release workflow template offered; the org move if personal), then the proposal draft and the form link; no push to their repo unasked |
+| 23 | "Try Labs proposal <n>" | both | `./harness labs try <n>`: the scaffold's TODOs reported, the sandbox's URLs, the smoke test and app process results; `try.md` filled with what was clicked |
+| 24 | "Accept Labs proposal <n>" | member | Trial first (or its record), warnings read out, `accept.sh` shown and explained, not run until the person says so; a contributor is told it is for Labs members |
 
 ## Log
 

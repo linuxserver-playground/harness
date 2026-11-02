@@ -143,6 +143,31 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   (`scripts/data.sh`); the site's snapshots are laid over the checkout by `npm run snapshot`. Both paths are
   ignored on main, and only CI publishes the branch: never push to `data` or add the data back to main.
 
+## LinuxServer Labs
+
+- **`secrets: inherit` stops at the organisation boundary.** GitHub passes inherited secrets only to a reusable
+  workflow in the same org, and Labs repos call the main org's workflows, so builder's generated `build.yml` and
+  `pr-report.yml` pass each secret by name. Never hand-write `secrets: inherit` into a Labs workflow, and never
+  copy a secret between the orgs: Labs has its own org secrets and Actions variables (`CONTROL_URL`, `SITE_URL`,
+  `HUB_URL`).
+- **A Labs name must be unique across Labs, the main org and live `linuxserver`,** so a graduation never collides.
+  `./harness labs accept` warns, and the proposals check flags it.
+- **Labs has no mods, PRoot Apps or stores.** Images still take the main org's universal mods at runtime
+  (`DOCKER_MODS=ghcr.io/linuxserver-playground/mods:<tag>`), because they run on the playground base images.
+- **Labs membership is separate.** `./harness whoami` records it (`labs_member` in `.harness/profile.json`); a main
+  org member who is not a Labs member can try proposals but not accept them, and the guard treats them as a
+  contributor in Labs.
+- **`gh issue create` cannot fill an issue form.** File a proposal through the web form (`./harness labs form <name>`
+  prints it prefilled); only the form adds the `proposal` label.
+- **A Labs repository's first pull request must not add a generated file,** `build.yml` included, or its build fails
+  the generated-file check. `accept.sh` therefore puts the generated `build.yml` on `main` in a `[skip ci]` commit,
+  beside the proposal link, before it pushes the image branch.
+- **Never `gh repo create --template linuxserverlabs-playground/docker-template` for a Labs image.** The template's
+  `main` is the developers' starter kit; an accepted image's `main` is the template's `pending` branch, pushed to a
+  repository created empty (what `accept.sh` does).
+- **The Labs hub's `images.json` still lists images under `data.repositories.linuxserver`.** It is the same code;
+  the key is not the org.
+
 ## Fixtures and noise
 
 - **[docker-heimdall#6](https://github.com/linuxserver-playground/docker-heimdall/pull/6) is a reference PR, never merged.** Leave it out of PR rankings and reviews
