@@ -20,9 +20,8 @@ The quick ways in:
 
 ## Control (live, minute to minute)
 
-`./harness control <path>` fetches any route below (for example `./harness control api/fleet.json`). It finds
-control's URL in `HARNESS_CONTROL_URL` or, for members, the org's `CONTROL_URL` Actions variable. The routes are
-listed in `repos/control/README.md`.
+Base: `https://ci.thelamer.duckdns.org:8443` (`HARNESS_CONTROL_URL` overrides it). `./harness control <path>` fetches
+any route below, for example `./harness control api/fleet.json`. The routes are listed in `repos/control/README.md`.
 
 | Endpoint | Holds | Useful fields |
 | --- | --- | --- |

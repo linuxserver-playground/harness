@@ -31,7 +31,7 @@ set -euo pipefail
 VERSION=0.1.0
 ORG=${HARNESS_ORG:-linuxserver-playground}
 LABS_ORG=${HARNESS_LABS_ORG:-linuxserverlabs-playground}
-CONTROL=${HARNESS_CONTROL_URL:-}
+CONTROL=${HARNESS_CONTROL_URL:-https://ci.thelamer.duckdns.org:8443}
 HUB=${HARNESS_HUB_URL:-https://linuxserver-playground.github.io/hub}
 SITE=${HARNESS_SITE_URL:-https://linuxserver-playground.github.io/site}
 REGISTRY=ghcr.io/$ORG
@@ -52,15 +52,7 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 need() { for tool in "$@"; do have "$tool" || die "$tool is required (run ./harness doctor)"; done; }
 
-# Control's URL: HARNESS_CONTROL_URL, else the org's CONTROL_URL Actions variable, which members can read with gh.
-# Without either, the commands that read control go without it.
-control_url() {
-  if [[ -z "$CONTROL" ]] && have gh; then
-    CONTROL=$(gh variable get CONTROL_URL --org "$ORG" 2>/dev/null || true)
-  fi
-  [[ -n "$CONTROL" ]]
-}
-control_fetch() { control_url && fetch "$CONTROL/${1#/}"; }
+control_fetch() { fetch "$CONTROL/${1#/}"; }
 fetch() { curl -fsS --max-time 30 "$1"; }
 
 # The directory a repo is cloned into: .github would be hidden, so it is dot-github, as in the workspace.
@@ -368,8 +360,7 @@ cmd_setup() {
 cmd_control() {
   need curl
   [[ $# -eq 1 ]] || die "usage: ./harness control <path>, e.g. api/queue.json"
-  control_url || die "control's URL is unknown: set HARNESS_CONTROL_URL, or sign in to gh as a member of $ORG"
-  fetch "$CONTROL/${1#/}"
+  control_fetch "$1"
 }
 
 cmd_snapshot() {
