@@ -87,7 +87,7 @@ notes source", "every build this week with a failed test", "which images pin a `
 fetch hundreds of Pages URLs: GitHub Pages rate-limits by IP and a burst locks the machine out of the hub for half
 an hour (gotchas). Everything the API serves is derived from the hub's `data` branch, one commit with no history,
 and `./harness data` checks it out into `repos/hub/data/` (about 190 MB, depth 1; the hub's own `scripts/data.sh`,
-so later runs fetch only what changed). The triage bot reads the fleet the same way.
+so later runs fetch only what changed).
 
 | Path under `repos/hub/data/` | Holds |
 | --- | --- |

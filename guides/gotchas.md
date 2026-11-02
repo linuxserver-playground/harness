@@ -66,10 +66,9 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
 
 ## Issues and pull requests
 
-- **A bot answers every new issue and pull request within a minute or two** (`lsio-playground-triage[bot]`). Its
-  comment is a first guess written by an AI from the hub's data, not a maintainer's verdict: correct it in the
-  thread if it is wrong. It replies again only to the thread's author, at most three times. A maintainer stops it
-  on a thread with the `no-bot` label.
+- **No bot answers issues or pull requests.** The AI first responder (`lsio-playground-triage[bot]`) was a
+  demonstration and was shut down on 2026-11-02. Its old comments stay in the threads; a maintainer's reply is
+  the answer.
 
 ## Generated files
 
