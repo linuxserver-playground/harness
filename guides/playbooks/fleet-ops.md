@@ -21,7 +21,7 @@ are about to do and get a yes first.
 | Build a branch now | `gh workflow run build.yml -R linuxserver-playground/docker-<name> --ref <branch> -f reason=manual` (reasons: manual, upstream, packages, rebuild) |
 | Skip flags, the package check, reconcile | The site's fleet pages (https://linuxserver-playground.github.io/site/fleet/) after "Sign in with GitHub" (use Chromium: the cookie is cross-site in the playground). Control's actions need a browser session, so send the person there with the exact page |
 
-**Before a mass dispatch** (more than a handful), check `curl -fsS https://ci.thelamer.duckdns.org:8443/api/queue.json`.
+**Before a mass dispatch** (more than a handful), check `./harness control api/queue.json`.
 Then dispatch in batches of about 10, waiting for the queue to drain, and keep heavy images apart (webtop,
 selkies and kasmvnc bases). The limit is 20 concurrent jobs for the whole org.
 
@@ -50,7 +50,7 @@ The change is merged to `workflows` main by PR first ([infra-change](infra-chang
 0. See where things stand before touching anything: `git -C repos/workflows ls-remote origin refs/tags/v1 refs/heads/main`
    (the tag may already be on main: someone else released), and `gh run list -R linuxserver-playground/docker-heimdall --limit 3`
    (a proof build may already be running; `gh api repos/linuxserver-playground/docker-heimdall/actions/runs/<id> --jq '.referenced_workflows[].sha'`
-   says which workflows commit it used, and `curl -fsS https://ci.thelamer.duckdns.org:8443/api/builds/linuxserver-playground/docker-heimdall/<id>.json | jq '{reason: .build.reason, event: .run.event, actor: .run.actor}'`
+   says which workflows commit it used, and `./harness control api/builds/linuxserver-playground/docker-heimdall/<id>.json | jq '{reason: .build.reason, event: .run.event, actor: .run.actor}'`
    says what kind of run it was). Never move a tag that is already there or start a second proof for one run.
 1. In `repos/workflows` on main: `./harness setup workflows` once, then `./harness validate workflows` (runs
    `./scripts/check.sh`, with shellcheck from its container when none is installed) and stop on any failure.

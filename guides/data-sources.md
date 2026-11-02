@@ -20,7 +20,9 @@ The quick ways in:
 
 ## Control (live, minute to minute)
 
-Base: `https://ci.thelamer.duckdns.org:8443`. Its routes are listed in `repos/control/README.md`.
+`./harness control <path>` fetches any route below (for example `./harness control api/fleet.json`). It finds
+control's URL in `HARNESS_CONTROL_URL` or, for members, the org's `CONTROL_URL` Actions variable. The routes are
+listed in `repos/control/README.md`.
 
 | Endpoint | Holds | Useful fields |
 | --- | --- | --- |
@@ -136,18 +138,17 @@ jq -r '.upstream.version.type // "none"' $D/images/*/manifest.*.json | sort | un
 ## Recipes
 
 ```bash
-C=https://ci.thelamer.duckdns.org:8443/api
 H=https://linuxserver-playground.github.io/hub/api/v1
 
 # Red live branches, newest first
-curl -fsS $C/fleet.json | jq -r '.rows | map(select(.result == "failure")) | sort_by(.built_at) | reverse[]
+./harness control api/fleet.json | jq -r '.rows | map(select(.result == "failure")) | sort_by(.built_at) | reverse[]
   | "\(.image):\(.branch) \(.built_at) https://github.com/\(.repo)/actions/runs/\(.run_id)"'
 
 # Live branches whose upstream moved but have not released it
-curl -fsS $C/fleet.json | jq -r '.rows[] | select(.drift == "ahead") | "\(.image):\(.branch) \(.released) -> upstream \(.upstream)"'
+./harness control api/fleet.json | jq -r '.rows[] | select(.drift == "ahead") | "\(.image):\(.branch) \(.released) -> upstream \(.upstream)"'
 
 # Open PRs with build state and age
-curl -fsS $C/pulls.json | jq -r '.pulls[] | "\(.pull.repo | sub(".*/"; ""))#\(.pull.number) \(.run.conclusion // "no build") review=\(.pull.review_state // "none") \(.pull.created_at[:10]) \(.pull.title)"'
+./harness control api/pulls.json | jq -r '.pulls[] | "\(.pull.repo | sub(".*/"; ""))#\(.pull.number) \(.run.conclusion // "no build") review=\(.pull.review_state // "none") \(.pull.created_at[:10]) \(.pull.title)"'
 
 # Which images ship a package, and which versions
 curl -fsS $H/packages/openssl.json | jq -r '.data.holders | map(select(.arch == "amd64")) | group_by(.version)[]
@@ -166,10 +167,10 @@ curl -fsS $H/catalog/sonarr/builds/<tag>/diff.json | jq '.data.diff | {classific
 curl -fsS $H/catalog/sonarr/builds/<tag>/diff.json | jq '.data.diff | {trigger, reasons, commits: [.commit.commits[]? | {sha: .sha[:7], subject, bot}], areas: .commit.areas}'
 
 # Why nothing has been dispatched for an image: the scheduler's newest decisions with their reason
-curl -fsS "$C/scheduler.json?image=sonarr" | jq -r '.decisions[:10][] | "\(.decision.at[:16]) \(.decision.branch) \(.decision.kind): \(.decision.outcome) \(.info.reason // "")"'
+./harness control "api/scheduler.json?image=sonarr" | jq -r '.decisions[:10][] | "\(.decision.at[:16]) \(.decision.branch) \(.decision.kind): \(.decision.outcome) \(.info.reason // "")"'
 
 # The builds control did dispatch for an image, newest first (two checks an hour bury them in the list above)
-curl -fsS "$C/scheduler.json?image=sonarr&outcome=dispatch" | jq -r '.decisions[:5][] | "\(.decision.at[:16]) \(.decision.branch) \(.decision.kind) → \(.info.dispatch_reason // "?") (\(.info.reason // ""))"'
+./harness control "api/scheduler.json?image=sonarr&outcome=dispatch" | jq -r '.decisions[:5][] | "\(.decision.at[:16]) \(.decision.branch) \(.decision.kind) → \(.info.dispatch_reason // "?") (\(.info.reason // ""))"'
 
 # Who started a workflow_dispatch run (a person's gh workflow run, or control's App)
 gh api repos/linuxserver-playground/docker-sonarr/actions/runs/<id> --jq '"\(.event) by \(.triggering_actor.login) at \(.run_started_at)"'

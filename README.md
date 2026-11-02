@@ -63,4 +63,5 @@ Either way, a person reads and files every issue, PR and review. The agent draft
   blog. Its [Contribute page](https://linuxserver-playground.github.io/site/contribute/) and
   [Contribute docs](https://linuxserver-playground.github.io/site/docs/contribute/) are the public way in that
   sends people here. The [hub](https://linuxserver-playground.github.io/hub/) serves the data, and
-  [control](https://ci.thelamer.duckdns.org:8443/status) schedules and tracks builds.
+  control schedules and tracks builds; its live state is on the site's
+  [fleet board](https://linuxserver-playground.github.io/site/fleet/).

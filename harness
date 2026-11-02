@@ -11,6 +11,7 @@
 #   ./harness fork <repo>                    contributors: fork a cloned repo and make the fork origin
 #   ./harness setup <repo>                   install one repo's dev environment (venv, npm, cargo)
 #   ./harness snapshot                       one consistent picture of the org from control, the hub and GitHub
+#   ./harness control <path>                 GET one of control's JSON routes (api/queue.json, api/builds/<owner>/<repo>/<run>.json, ...)
 #   ./harness lookup <image>                 one image at a glance: branches, builds, tests, PRs, issues, dependents, why the newest build exists
 #   ./harness data                           check out the hub's data branch into repos/hub/data: the whole fleet in one clone, for fleet-wide questions
 #   ./harness try <image> [tag] | --build <repo> | --stop [image]   [--env KEY=VALUE]...
@@ -29,8 +30,8 @@ set -euo pipefail
 
 VERSION=0.1.0
 ORG=${HARNESS_ORG:-linuxserver-playground}
-LABS_ORG=${HARNESS_LABS_ORG:-linuxserver-playground-labs}
-CONTROL=${HARNESS_CONTROL_URL:-https://ci.thelamer.duckdns.org:8443}
+LABS_ORG=${HARNESS_LABS_ORG:-linuxserverlabs-playground}
+CONTROL=${HARNESS_CONTROL_URL:-}
 HUB=${HARNESS_HUB_URL:-https://linuxserver-playground.github.io/hub}
 SITE=${HARNESS_SITE_URL:-https://linuxserver-playground.github.io/site}
 REGISTRY=ghcr.io/$ORG
@@ -50,6 +51,16 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 need() { for tool in "$@"; do have "$tool" || die "$tool is required (run ./harness doctor)"; done; }
+
+# Control's URL: HARNESS_CONTROL_URL, else the org's CONTROL_URL Actions variable, which members can read with gh.
+# Without either, the commands that read control go without it.
+control_url() {
+  if [[ -z "$CONTROL" ]] && have gh; then
+    CONTROL=$(gh variable get CONTROL_URL --org "$ORG" 2>/dev/null || true)
+  fi
+  [[ -n "$CONTROL" ]]
+}
+control_fetch() { control_url && fetch "$CONTROL/${1#/}"; }
 fetch() { curl -fsS --max-time 30 "$1"; }
 
 # The directory a repo is cloned into: .github would be hidden, so it is dot-github, as in the workspace.
@@ -354,6 +365,13 @@ cmd_setup() {
 
 # ---------------------------------------------------------------------------------------------------- data
 
+cmd_control() {
+  need curl
+  [[ $# -eq 1 ]] || die "usage: ./harness control <path>, e.g. api/queue.json"
+  control_url || die "control's URL is unknown: set HARNESS_CONTROL_URL, or sign in to gh as a member of $ORG"
+  fetch "$CONTROL/${1#/}"
+}
+
 cmd_snapshot() {
   need curl jq
   local stamp dir
@@ -361,7 +379,7 @@ cmd_snapshot() {
   dir=$state/snapshot/$stamp
   mkdir -p "$dir"
   for endpoint in status fleet runs queue pulls issues skips batch; do
-    fetch "$CONTROL/api/$endpoint.json" >"$dir/control-$endpoint.json" || warn "control /api/$endpoint.json failed"
+    control_fetch "api/$endpoint.json" >"$dir/control-$endpoint.json" || warn "control /api/$endpoint.json failed"
   done
   fetch "$HUB/api/v1/status.json" >"$dir/hub-status.json" || warn "hub status failed"
   fetch "$HUB/api/v1/fleet/staleness.json" >"$dir/hub-staleness.json" || warn "hub staleness failed"
@@ -395,7 +413,7 @@ cmd_lookup() {
   mkdir -p "$tmp"
   fetch "$HUB/api/v1/catalog/$name.json" >"$tmp/catalog.json" 2>/dev/null || die "the hub has no image '$name': lookup is for images (check $HUB/api/v1/images.json); for an infrastructure repo use gh and the snapshot"
   fetch "$HUB/api/v1/catalog/$name/builds.json" >"$tmp/builds.json" || echo '{"data":{"builds":[]}}' >"$tmp/builds.json"
-  fetch "$CONTROL/api/images/$name.json" >"$tmp/control.json" || echo '{}' >"$tmp/control.json"
+  control_fetch "api/images/$name.json" >"$tmp/control.json" || echo '{}' >"$tmp/control.json"
   fetch "$HUB/api/v1/fleet/bases.json" >"$tmp/bases.json" || echo '{"data":{"bases":[]}}' >"$tmp/bases.json"
   jq -r --arg site "$SITE" '.data.image |
     "\(.name) (\(.kind // "app"))\(if .deprecated then " DEPRECATED" else "" end)\(if .archived then " ARCHIVED" else "" end): \(.description // "" | .[0:160])",
@@ -408,13 +426,13 @@ cmd_lookup() {
   jq -r '.rows // [] | .[] | "    \(.branch): \(.result // "never built")\(if .result == "failure" then " (reason \(.reason // "?"), would have published \(.version_tag // "?"), https://github.com/\(.repo)/actions/runs/\(.run_id))" else " \(.version_tag // "") (reason \(.reason // "?"))" end); released \(.released // "nothing")\(if .drift == "ahead" then " (upstream moved to \(.upstream); check it by eye: os bases and a branch released minutes ago show ahead wrongly)" else "" end)\(if (.skip | length) > 0 then " skip: \(.skip | join(","))" else "" end), last run ended \(.built_at // "?"), next check \(.next_check // "?")"' "$tmp/control.json"
   # The newest scheduler decision per branch and kind says why nothing was dispatched (cooldown, assets not ready,
   # a skip flag, "os image: builds on the package check") or that a build went out.
-  fetch "$CONTROL/api/scheduler.json?image=$name" >"$tmp/scheduler.json" || echo '{"decisions":[]}' >"$tmp/scheduler.json"
+  control_fetch "api/scheduler.json?image=$name" >"$tmp/scheduler.json" || echo '{"decisions":[]}' >"$tmp/scheduler.json"
   say "  scheduler (newest decision per branch and check):"
   jq -r '[.decisions[] | .decision + {reason: (.info.reason // "")}] | group_by([.branch, .kind]) | map(max_by(.at)) | sort_by(.branch, .kind)[]
     | "    \(.branch) \(.kind): \(.outcome)\(if .reason != "" then " (\(.reason))" else "" end) at \(.at[:16])"' "$tmp/scheduler.json"
   # The newest dispatch per branch is the build control last asked for; a workflow_dispatch by a person shows in
   # neither list (gh api repos/<org>/<repo>/actions/runs/<id> --jq .triggering_actor.login names them).
-  fetch "$CONTROL/api/scheduler.json?image=$name&outcome=dispatch" >"$tmp/dispatches.json" || echo '{"decisions":[]}' >"$tmp/dispatches.json"
+  control_fetch "api/scheduler.json?image=$name&outcome=dispatch" >"$tmp/dispatches.json" || echo '{"decisions":[]}' >"$tmp/dispatches.json"
   jq -r '[.decisions[] | .decision + {reason: (.info.reason // ""), as: (.info.dispatch_reason // "")}] | group_by(.branch) | map(max_by(.at))[]
     | "    \(.branch) last dispatch by control: \(.kind) check → \(.as) build (\(.reason)) at \(.at[:16])"' "$tmp/dispatches.json"
   say "  recent releases (hub; a record newer than its Release by an hour or more is a republish of the same tag):"
@@ -432,8 +450,8 @@ cmd_lookup() {
   if [[ -n "$newest" ]] && fetch "$HUB/api/v1/catalog/$name/builds/$newest/diff.json" >"$tmp/diff.json" 2>/dev/null; then
     jq -r '.data.diff | "  why the newest record of \(.tag) exists: trigger \(.trigger // "not recorded (record made before 2026-10-31)"); \(.reasons // [] | join("; "))\(if (.commit.commits // []) | length > 0 then "; commits: " + ((.commit.commits | map("\(.sha[:7]) \(.subject)\(if .bot then " (bot)" else "" end)")) | join(", ")) else "" end)"' "$tmp/diff.json"
   fi
-  fetch "$CONTROL/api/pulls.json" >"$tmp/pulls.json" || echo '{"pulls":[]}' >"$tmp/pulls.json"
-  fetch "$CONTROL/api/issues.json" >"$tmp/issues.json" || echo '{"issues":[]}' >"$tmp/issues.json"
+  control_fetch "api/pulls.json" >"$tmp/pulls.json" || echo '{"pulls":[]}' >"$tmp/pulls.json"
+  control_fetch "api/issues.json" >"$tmp/issues.json" || echo '{"issues":[]}' >"$tmp/issues.json"
   jq -r --arg repo "$ORG/docker-$name" '[.pulls[] | select(.pull.repo == $repo)] |
     "  open PRs: \(length)", (.[] | "    #\(.pull.number) \(.pull.title) (build \(.run.conclusion // .run.status // "none"), review \(.pull.review_state // "none"))\(if (.pull.title | startswith("Reference PR")) then "  [the reference PR: not work, leave it out of rankings]" else "" end)")' "$tmp/pulls.json"
   jq -r --arg repo "$ORG/docker-$name" '[.issues[] | select(.repo == $repo)] |
@@ -805,7 +823,7 @@ cmd_draft() {
     name=$(image_name "$name")
     out=$state/drafts/proposal-$name.md
     sed -e "s|TODO <name>|$name|" -e "s|{{role}}|$role|g" -e "s|{{version}}|$VERSION|g" "$here/templates/proposal-image.md" >"$out"
-    say "<!-- file it with: gh issue create -R $ORG/harness --title \"Proposal: $name\" --body-file $out  (the labs org, $LABS_ORG, does not exist yet) -->" >>"$out"
+    say "<!-- file it with: gh issue create -R $ORG/harness --title \"Proposal: $name\" --body-file $out  (until the Labs proposals repository exists in $LABS_ORG) -->" >>"$out"
     say "draft: ${out#"$here"/}"
     return
   fi
@@ -902,6 +920,7 @@ main() {
     sync) cmd_sync ;;
     fork) cmd_fork "$@" ;;
     setup) cmd_setup "$@" ;;
+    control) cmd_control "$@" ;;
     snapshot) cmd_snapshot ;;
     lookup) cmd_lookup "$@" ;;
     data) cmd_data ;;

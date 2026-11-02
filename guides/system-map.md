@@ -10,7 +10,7 @@ either, they win. Then fix this guide.
 | --- | --- | --- |
 | Website: images, build pages, fleet board, docs, blog, mods, PRoot Apps, stores, and the Contribute page (`/contribute/`) and docs section (`/docs/contribute/`) that send people to this harness, plus the maintainer reference (`/docs/maintain/`: the manifest, version sources, generated files and where to edit each) | https://linuxserver-playground.github.io/site/ | users and the team. It is the single pane of glass |
 | Hub: static API, store templates, proxy confs, k8s manifests, mods index, PRoot Apps index | https://linuxserver-playground.github.io/hub/ (`openapi.json` lists the endpoints) | the site, the stores, agents |
-| Control plane: scheduler, webhooks, live JSON API, member actions, Discord | https://ci.thelamer.duckdns.org:8443 (`/status`, `/api/*.json`) | the site's fleet pages, the team, agents |
+| Control plane: scheduler, webhooks, live JSON API, member actions, Discord | the org's `CONTROL_URL` variable; `./harness control <path>` reads its `/api/*.json` | the site's fleet pages, the team, agents |
 | Images | `ghcr.io/linuxserver-playground/<name>` | users |
 | Branch builds, PR builds, staging | `ghcr.io/linuxserver-playground/dev/<name>`, `untrusted-pr/<name>`, `build/<name>` | reviewers |
 
@@ -24,7 +24,7 @@ either, they win. Then fix this guide.
 | `dumper` | A Rust static file-tree walker for the bundle | A GitHub Release. The workflows fetch `releases/latest` |
 | `hub` | Ingests each release's `build.json` and `record.json` into `data/` (its `data` branch, one commit), serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index, the PRoot Apps index and build pages. `refresh.yml` runs hourly: stars, mods, PRoot Apps (proot-apps' `metadata.yml`), and pushes the store repos | A push to main, the hourly refresh, or `repository_dispatch image-released` |
 | `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | A push to main, `hub-updated` (relayed by control after every hub deploy), or the daily cron |
-| `control` | A FastAPI GitHub App on a small server (n97). It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the server pulls it within 5 minutes |
+| `control` | A FastAPI GitHub App, one always-on container. It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the deployment pulls it within 5 minutes |
 | `triage` | Retired on 2026-11-02: the AI first responder was a demonstration and is not carried to the live org. Nothing runs it; the repository is kept for reference | Nothing |
 | `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE, FUNDING.yml, `root/donate.txt` and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
 | `docker-mods` | `master` holds the tooling. There is one branch per mod (`<target>-<name>`) with `mod.yml` | A push to a mod branch builds the mod image, and control re-reads a changed `mod.yml` at once. The hub's next scheduled run reads the `mod.yml` |
@@ -92,7 +92,7 @@ Control replaces every per-repo cron:
   `control/batch.py`, `/api/batch.json`.
 
 Every 30 minutes, and on the first push to a new repo, it rediscovers the fleet from every `docker-*`
-repo's `image.yml`. Adding an image needs no change to control, the hub or the server.
+repo's `image.yml`. Adding an image needs no change to control or the hub.
 
 **A branch is live** when its own `image.yml` names it in `release.branch`. The default branch's
 `release.tags` only advertises tags in the README and the store pickers.
