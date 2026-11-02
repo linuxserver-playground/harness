@@ -14,6 +14,8 @@ built, tested and documented the way every LinuxServer image is. The bar for the
 the process is the same. A Labs image can graduate to the main org once it is good, used and maintained.
 
 Images live at `ghcr.io/linuxserverlabs-playground/<name>`. There are no Labs mods, PRoot Apps or store templates.
+The public guide for developers is [Get your app into Labs](https://linuxserverlabs-playground.github.io/site/propose/); link it when the person wants to read rather
+than be walked through.
 
 ## What the developer does, and what the team does
 
