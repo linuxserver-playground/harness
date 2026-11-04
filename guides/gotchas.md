@@ -188,3 +188,9 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   refresh skips a build the hub does not serve yet. A run that looks stuck, a site Deploy that failed on a 404 or
   a backfill error on `/status` during an incident usually repairs itself; the workspace's
   `docs/github-outage-2026-10-30.md` lists what does and what does not.
+- **A green Pages deploy is not proof the site changed.** GitHub can report a Pages deploy successful while the site
+  keeps serving an older one, with its status page green (the hub, 2026-11-04, for over an hour). The hub serves
+  `/deploy.json` naming the Deploy run it came from: compare it with the newest Deploy run before you blame the
+  ingest. The hub's Deploy checks it itself and goes red when Pages never serves it, and control redeploys the hub
+  with backoff; an overdue release's alert then says "the hub has ingested it, but its Pages site still serves an
+  older deploy".

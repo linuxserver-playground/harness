@@ -52,6 +52,7 @@ response wraps its payload in `data`.
 | Endpoint | Holds |
 | --- | --- |
 | `/health.json`, `/api/v1/status.json` | Hub health, image count, freshness of each source, rejected releases |
+| `/deploy.json` | The Deploy run the served site came from (`run_id`, `run_attempt`, `sha`, `built_at`): newer data on the `data` branch than this run means Pages is serving a stale deploy |
 | `/api/v1/images.json` | The v1 image list (`data.repositories.linuxserver[]`): name, version, category, stars, tags, architectures |
 | `/api/v1/catalog.json`, `/api/v1/catalog/{name}.json` | Full image detail (`data.image`): `kind`, `base`, `config.{ports,volumes,env_vars}`, `tags`, `changelog`, `snippets`, `links` |
 | `/api/v1/catalog/{name}/builds.json` | Build history (`data.builds[]`): `tag`, `branch`, `created`, `test_success`, `platforms[].{arch,result,size}`, `base`, `index_digest` (what an image built on this build records as `base.digest`), links |
