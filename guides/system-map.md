@@ -62,8 +62,9 @@ the batch projects (proot-apps, selkies-layers, wheelie): one card each, then on
    the site's five.
 6. **The hub's Deploy** reconciles the whole org over GraphQL, ingests every release `data/` lacks, publishes
    `data/` as the one commit of its `data` branch, renders the API and deploys Pages. From then on the build's
-   site page works: the site's 404 page renders new builds live from the hub API (`LiveBuildPage`).
-7. **Control sends `hub-updated`** to the site, which rebuilds and makes the new pages static.
+   site page works: every build page is rendered in the browser from the hub API (`LiveBuildPage`, on the
+   site's 404 page); the site emits no file per build or per run.
+7. **Control sends `hub-updated`** to the site, which rebuilds its image pages, lists and search.
 8. **Hourly,** the hub's `refresh.yml` reads stars, refreshes the mods index, and asks for a
    Deploy.
 
