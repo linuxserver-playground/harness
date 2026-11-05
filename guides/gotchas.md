@@ -24,7 +24,8 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   and control `f235f4e`; before that a `[skip ci]` templating commit counted as a new head and minted the next
   `-lsN`, which is why some tags from before then exist). A `manual` or `rebuild` run from a commit that is
   already released (or differs from it only in the pipeline's `[skip ci]` commits) publishes the same `-lsN`
-  again, and the hub ingests the new record only when its `build.json` is an hour or more newer than the one it
+  again when the upstream version is the same; a different upstream version, newer or older, is always a new
+  release with the next `-lsN`, and the hub ingests the new record only when its `build.json` is an hour or more newer than the one it
   holds; the site follows on the next `hub-updated`. So a proof build of an unchanged image shows up on the site
   later than the run finishes, and a `packages` run is the only kind that takes the next `-lsN` from the same
   head.
