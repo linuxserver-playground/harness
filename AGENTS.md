@@ -52,7 +52,7 @@ The person may be new to working with an agent. When they seem unsure what to as
 | Write or fix docs; write a blog post | [docs-and-blog](guides/playbooks/docs-and-blog.md) | docs and blog | docs only |
 | Change the site, hub, control, workflows, ci or builder | [infra-change](guides/playbooks/infra-change.md) | PR | bug-fix PR, or an issue |
 | Add or change a field, a data shape or an API (crosses repos) | [contract-change](guides/playbooks/contract-change.md) | change train | an issue |
-| Rerun, dispatch, skip, refresh the hub, release workflows, remove an image | [fleet-ops](guides/playbooks/fleet-ops.md) | yes | no: `./harness draft request <repo>`, an issue asking a member |
+| Rerun, dispatch, skip, refresh the hub, release workflows, remove an image, reset a Pages site that will not publish | [fleet-ops](guides/playbooks/fleet-ops.md) | yes; the Pages reset needs an org owner | no: `./harness draft request <repo>`, an issue asking a member |
 
 ## What you must know before changing anything
 

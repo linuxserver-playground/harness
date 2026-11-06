@@ -15,7 +15,9 @@
 2. **Control:** `control-status.json`. Is the GitHub App installed? When were the last discovery and the
    last backfill (`last_backfill.error`)? Is the scheduler running? Did the last reconcile redeliver anything
    (`last_reconcile.counts.redelivered`), and is `healing` retrying a Pages deploy or a run? (`deliveries[]`
-   lists what arrived; it carries no failure field.)
+   lists what arrived; it carries no failure field.) A Pages row retrying for an hour or more, or given up, goes
+   to [fleet-ops](fleet-ops.md), "A Pages site that will not publish": run `./harness pages check <repo>` and say
+   whether a reset is on the table.
 3. **Red live branches:** `control-fleet.json` rows with `result == "failure"`. For each one:
    - the failing step: `gh run view <run_id> -R <repo> --log-failed | grep -B12 'Process completed with exit code'`
      (a bare `tail` shows Publish's "a job failed" boilerplate, not the cause; a buildx failure may sit 40

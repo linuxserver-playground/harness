@@ -23,7 +23,8 @@ LinuxServer's own tiers (developers, support…) come with the move to the real 
   ([labs-accept](../playbooks/labs-accept.md)). `./harness whoami` says whether you are a Labs member; Labs is its
   own org with its own members (the Labs admins team).
 - **Operates the fleet.** Rerun, dispatch, skip flags, a hub refresh, releasing workflows, removing an image
-  ([fleet-ops](../playbooks/fleet-ops.md)).
+  ([fleet-ops](../playbooks/fleet-ops.md)). An org owner can also reset a Pages site that has stopped publishing
+  ("A Pages site that will not publish"); `./harness whoami` says whether the person is an owner.
 - **Posts reviews and labels.** Only after reading your draft.
 
 ## What still goes through review

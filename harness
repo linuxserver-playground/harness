@@ -24,6 +24,9 @@
 #                                            (issue: a bug; request: a feature, topic or removal; proposal: a new image)
 #   ./harness allow push|force-push|tag|delete <repo> [minutes]
 #                                            members: let the guard hook pass one protected action for a while (default 30 min)
+#   ./harness pages check <repo>             is the repo's Pages site serving its newest deploy? (the hub, the site, docker-*)
+#   ./harness pages reset <repo> [--yes]     org owners: delete and recreate a stuck Pages site, then redeploy it
+#                                            (prints the plan and changes nothing without --yes)
 #   ./harness labs form <name>               the filled proposal draft as a prefilled link to the Labs proposal form
 #   ./harness labs scaffold <issue>          a v2 image repo from a Labs proposal, in .harness/labs/<name>/
 #   ./harness labs try <issue> [--fresh] | --stop <name>
@@ -182,6 +185,8 @@ briefing() {
   case "$role" in
     member)
       say "Path: member. Read guides/roles/member.md. You may create repos; changes to existing repos go up as a pull request for review."
+      [[ "$(jq -r '.org_role // empty' "$profile")" == admin ]] &&
+        say "Owner: you are an owner of $ORG, so the owner-only steps are open to you (a Pages site that will not publish: guides/playbooks/fleet-ops.md)."
       if [[ "$(jq -r '.labs_member // false' "$profile")" == true ]]; then
         say "Labs: you are a member of $LABS_ORG too: ./harness labs try|accept <issue> for its proposals (guides/playbooks/labs-accept.md)."
       else
@@ -938,6 +943,133 @@ cmd_allow() {
   say "allowed: $action on $repo for $minutes minutes (the guard hook lets it through until then)"
 }
 
+# ---------------------------------------------------------------------------------------------------- pages
+
+# GitHub Pages sometimes keeps serving an old deploy of one repository while it reports every new one successful,
+# or leaves new deploys syncing until they time out, with its status page green. Deleting the Pages site and
+# creating it again clears that. guides/playbooks/fleet-ops.md ("A Pages site that will not publish") says when.
+cmd_pages() {
+  local sub=${1:-}
+  (( $# )) && shift
+  case "$sub" in
+    check) pages_check "$@" ;;
+    reset) pages_reset "$@" ;;
+    *) die "usage: ./harness pages check <repo> | ./harness pages reset <repo> [--yes]" ;;
+  esac
+}
+
+# owner/name for a repo argument: <name>, docker-<name>, or <org>/<name> for the Labs org.
+pages_repo() {
+  local arg=${1:?repo}
+  if [[ "$arg" == */* ]]; then echo "${arg%/}"; else echo "$ORG/$(resolve_repo "$arg")"; fi
+}
+
+epoch_of() { date -d "$1" +%s 2>/dev/null || echo 0; }
+
+pages_check() {
+  need jq curl
+  local full name url served="" served_epoch newest="" newest_epoch verdict
+  full=$(pages_repo "${1:-}")
+  name=${full#*/}
+  url=$(gh api "repos/$full/pages" --jq .html_url 2>/dev/null) || die "$full has no Pages site (gh api repos/$full/pages: 404)"
+  say "Pages site: $url (repos/$full/pages: build_type $(gh api "repos/$full/pages" --jq .build_type))"
+  served=$(curl -fsSI --max-time 20 -H 'Cache-Control: no-cache' "${url}?harness=$(date +%s)" | tr -d '\r' |
+    sed -n 's/^last-modified: //Ip' | head -n1 || true)
+  served_epoch=$(epoch_of "$served")
+  say "Served deploy: ${served:-unknown} (last-modified of the site root)"
+  case "$name" in
+    hub)
+      local stamp run
+      stamp=$(curl -fsS --max-time 20 "${url%/}/deploy.json?harness=$(date +%s)" || true)
+      say "Served deploy.json: ${stamp:-unreadable}"
+      run=$(gh run list -R "$full" -w Deploy --status success -L 1 --json databaseId,updatedAt -q '.[0] | "\(.databaseId) \(.updatedAt)"' || true)
+      say "Newest successful Deploy: ${run:-none}"
+      newest=${run#* }
+      ;;
+    site)
+      newest=$(gh run list -R "$full" -w Deploy --status success -L 1 --json updatedAt -q '.[0].updatedAt' || true)
+      say "Newest successful Deploy: ${newest:-none}"
+      ;;
+    *)
+      newest=$(gh api "repos/$full/releases?per_page=10" --jq '[.[].published_at] | max // empty' || true)
+      say "Newest release: ${newest:-none} (the newest releases of every live branch are what its Pages serves)"
+      ;;
+  esac
+  newest_epoch=$(epoch_of "$newest")
+  verdict="up to date"
+  if (( served_epoch == 0 )); then
+    verdict="unknown: the site root answered no last-modified"
+  elif (( newest_epoch > served_epoch + 1800 )); then
+    verdict="STALE: the site predates its newest deploy by $(( (newest_epoch - served_epoch) / 60 )) minutes"
+  fi
+  say "Verdict: $verdict"
+  say "Control's healing (api/status.json): $(curl -fsS --max-time 20 "$CONTROL/api/status.json" 2>/dev/null |
+    jq -c --arg r "$full" '[.healing.pages_retrying[]?, .healing.pages_given_up[]? | select(.repo == $r)]' 2>/dev/null || echo unreadable)"
+}
+
+pages_reset() {
+  need jq
+  local full="" yes=false arg owner role pages build_type cname policy
+  for arg in "$@"; do
+    case "$arg" in
+      --yes) yes=true ;;
+      *) full=$(pages_repo "$arg") ;;
+    esac
+  done
+  [[ -n "$full" ]] || die "usage: ./harness pages reset <repo> [--yes]"
+  owner=${full%%/*}
+  role=$(gh api "user/memberships/orgs/$owner" --jq 'select(.state == "active") | .role' 2>/dev/null || true)
+  [[ "$role" == admin ]] ||
+    die "resetting a Pages site needs an owner of $owner (your role there: ${role:-none}). Ask an org owner, with ./harness pages check output"
+  pages=$(gh api "repos/$full/pages") || die "$full has no Pages site to reset"
+  build_type=$(jq -r .build_type <<<"$pages")
+  cname=$(jq -r '.cname // empty' <<<"$pages")
+  [[ "$build_type" == workflow ]] || die "$full deploys Pages from a branch ($build_type), not from Actions: reset it by hand in Settings > Pages"
+  policy=$(gh api "repos/$full/environments/github-pages" 2>/dev/null | jq -c .deployment_branch_policy || echo null)
+  policy=${policy:-null}
+
+  say "Reset of $full's Pages site:"
+  say "  1. delete it (gh api -X DELETE repos/$full/pages): $(jq -r .html_url <<<"$pages") answers 404 until step 4 lands"
+  say "  2. create it again, deployed from Actions (build_type workflow)"
+  [[ -n "$cname" ]] && say "     and set its custom domain $cname again: GitHub issues a new certificate, and HTTPS can fail for up to an hour"
+  say "  3. keep the github-pages environment's branch rule as it is now: $policy"
+  case "${full#*/}" in
+    hub | site) say "  4. redeploy: gh workflow run deploy.yml -R $full" ;;
+    docker-*) say "  4. redeploy: gh workflow run build.yml -R $full -f reason=pages (rebuilds the site from its Releases; builds nothing)" ;;
+    *) say "  4. redeploy: not known for this repo; run its Pages workflow yourself" ;;
+  esac
+  if [[ "$yes" != true ]]; then
+    say "Nothing changed. Run it again with --yes once the person has said yes."
+    return 0
+  fi
+
+  gh api -X DELETE "repos/$full/pages" >/dev/null
+  say "deleted"
+  local tries=0
+  until gh api -X POST "repos/$full/pages" -f build_type=workflow >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    (( tries < 6 )) || die "could not create $full's Pages site again: create it in Settings > Pages (source: GitHub Actions), then redeploy"
+    sleep 5
+  done
+  say "created again, deployed from Actions"
+  [[ -n "$cname" ]] && gh api -X PUT "repos/$full/pages" -f cname="$cname" >/dev/null && say "custom domain $cname set again"
+  if [[ "$policy" == null ]]; then
+    gh api -X PUT "repos/$full/environments/github-pages" --input - <<<'{"deployment_branch_policy":null}' >/dev/null
+    say "github-pages environment: no branch rule, as before"
+  else
+    say "github-pages environment now: $(gh api "repos/$full/environments/github-pages" | jq -c .deployment_branch_policy)"
+  fi
+  case "${full#*/}" in
+    hub | site) gh workflow run deploy.yml -R "$full" ;;
+    docker-*) gh workflow run build.yml -R "$full" -f reason=pages ;;
+    *)
+      say "Now run $full's Pages workflow yourself, then ./harness pages check $full"
+      return 0
+      ;;
+  esac
+  say "Redeploy dispatched: gh run list -R $full -L 2, watch it, then ./harness pages check $full"
+}
+
 # ---------------------------------------------------------------------------------------------------- labs
 
 # LinuxServer Labs ($LABS_ORG): proposals become images through these. guides/playbooks/labs-image.md (the
@@ -1234,7 +1366,7 @@ labs_accept() {
 
 # ---------------------------------------------------------------------------------------------------- main
 
-usage() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd=${1:-help}
@@ -1257,6 +1389,7 @@ main() {
     validate) cmd_validate "$@" ;;
     draft) need jq; cmd_draft "$@" ;;
     allow) cmd_allow "$@" ;;
+    pages) cmd_pages "$@" ;;
     labs) cmd_labs "$@" ;;
     version | --version) say "harness $VERSION" ;;
     help | -h | --help) usage ;;

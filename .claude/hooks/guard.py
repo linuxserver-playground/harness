@@ -202,6 +202,9 @@ def check_gh(command: str, seg: list[str]) -> None:
     api_delete = sub[:1] == ["api"] and re.search(r"(-X|--method)[ =]?(DELETE)", words)
     if sub == ["repo", "delete"] or api_delete:
         path = target or next((t for t in seg[2:] if "/" in t and not t.startswith("-")), "")
+        if api_delete and re.search(r"repos/[^/\s]+/[^/\s]+/pages/?$", path):
+            block("Resetting a Pages site goes through ./harness pages reset <repo> (org owners), which recreates it, keeps "
+                  "its environment and redeploys: guides/playbooks/fleet-ops.md, \"A Pages site that will not publish\".")
         name = path.split("/")[-1]
         if "/packages/container/" in path:
             # build%2Fsonarr, untrusted-pr%2Fsonarr, sonarr: all belong to docker-sonarr

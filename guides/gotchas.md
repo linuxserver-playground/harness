@@ -194,4 +194,7 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   `/deploy.json` naming the Deploy run it came from: compare it with the newest Deploy run before you blame the
   ingest. The hub's Deploy checks it itself and goes red when Pages never serves it, and control redeploys the hub
   with backoff; an overdue release's alert then says "the hub has ingested it, but its Pages site still serves an
-  older deploy".
+  older deploy". When that lasts an hour or more, with deploys "successful" in seconds or stuck syncing until they time
+  out, the repository's Pages is stuck on GitHub's side: an org owner can reset it (`./harness pages reset`,
+  [fleet-ops](playbooks/fleet-ops.md), "A Pages site that will not publish"). The hub on 2026-11-06 was stuck for
+  three hours, and a reset fixed it in minutes.

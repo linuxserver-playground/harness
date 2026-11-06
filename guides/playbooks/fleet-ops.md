@@ -8,6 +8,7 @@
 - "Refresh the hub."
 - "Release the workflows change."
 - "Remove docker-foo."
+- "The hub has not published for an hour." / "Pages keeps saying success but nothing changes."
 
 **Output:** the action, then a report with run links. Every action here changes live state, so say what you
 are about to do and get a yes first.
@@ -69,6 +70,50 @@ The change is merged to `workflows` main by PR first ([infra-change](infra-chang
    proof build of an unchanged head republishes the released tag (gotchas).
 6. If the build fails because of the change, move `v1` back to the previous commit (same approval) or fix
    forward. Say which you did.
+
+## A Pages site that will not publish
+
+**Who:** the check is for any member. The reset is for an **owner** of the repository's org: `./harness pages reset`
+checks the person's role (`gh api user/memberships/orgs/<org> --jq .role` is `admin`) and refuses anyone else. For
+anyone else, the answer is the `pages check` output and a note to ask an org owner.
+
+GitHub Pages can get stuck on one repository with its status page green. Every new deploy reports "success" within
+seconds while the site keeps serving an old one, or new deploys sit in `syncing_files` until `deploy-pages` gives
+up ("Timeout reached, aborting!"). Deleting the Pages site and creating it again is known to clear Pages errors
+like these when nothing else explains them. Offer it as an option only after the person has seen the evidence.
+
+1. **Is it stuck, and for how long?** `./harness pages check <repo>` (the hub, the site or a `docker-*` repo) shows
+   what the site serves next to its newest deploy or release, gives a verdict, and lists control's healing rows
+   for the repo. It counts as **prolonged** when the site has been stale for an hour or more, or control's
+   `healing` holds the repo in `pages_retrying` that long or in `pages_given_up`. Shorter than that, control's
+   own redeploys usually catch up: say so and check again later.
+2. **Rule out what is not Pages:**
+   - **a GitHub incident:** https://www.githubstatus.com. When Pages is degraded there, wait it out; a reset will not help;
+   - **a red step of our own:** the build, the ingest or an artifact upload. Fix that instead, per [explain](explain.md);
+   - **the hub's normal waits:** the "Wait for the Pages deploy budget" step keeps its deploys about five minutes
+     apart and is not a stall.
+3. **Show the evidence and offer the reset.** Quote the check, the failing deploy step's lines
+   (`gh run view <id> -R <repo> --log | grep -E 'Current status|Reported success|still serves|Timeout'`) and how
+   long it has lasted. Then offer the reset with what it costs:
+   - the site answers 404 for a few minutes, until the redeploy lands. For the hub, the site's live build pages and
+     control's publish checks fail while it does;
+   - a custom domain is set again and needs a new certificate, with HTTPS failing for up to an hour. The command
+     says when there is one.
+
+   It fixes the symptom, not GitHub's cause. Get a yes before going on.
+4. **Reset.** Run `./harness pages reset <repo>` to print the plan, then `./harness pages reset <repo> --yes`. The
+   command:
+   - deletes the Pages site and creates it again, deployed from Actions;
+   - keeps the `github-pages` environment's branch rule as it was;
+   - dispatches the redeploy: the hub's or the site's `deploy.yml`, or an image repository's `build.yml` with
+     `reason=pages`, which rebuilds its site from the Releases and builds no image.
+
+   Do not do it by hand: the guard stops a bare `gh api -X DELETE …/pages`.
+5. **Prove it.** Watch the redeploy to the end (`gh run list -R <repo> -L 2`, `gh run watch`), then run
+   `./harness pages check <repo>` again. For the hub, control's next successful Deploy clears its healing row and
+   sends `hub-updated`; confirm a site Deploy follows.
+6. **If it is still stuck after a reset,** stop: draft a GitHub support request with the runs and the check output
+   (`./harness draft issue`). The person files it.
 
 ## Remove an image
 
