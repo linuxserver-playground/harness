@@ -23,8 +23,8 @@ either, they win. Then fix this guide.
 | `workflows` | The reusable `image-build.yml` and `mod-build.yml`, one composite action per step, and `pr-report.yml` | The floating tag `v1` moves to the new commit. Image repos call `@v1` |
 | `ci` | The container test harness. It runs each built image, takes screenshots, and writes the test report and bundle | Push to main publishes `ci:latest`, which the workflows pull |
 | `dumper` | A Rust static file-tree walker for the bundle | A GitHub Release. The workflows fetch `releases/latest` |
-| `hub` | Ingests each release's `build.json` and `record.json` into `data/` (its `data` branch, one commit), serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index, the PRoot Apps index and build pages. `refresh.yml` runs hourly: stars, mods, PRoot Apps (proot-apps' `metadata.yml`), and pushes the store repos | A push to main, the hourly refresh, or `repository_dispatch image-released` |
-| `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | A push to main, `hub-updated` (relayed by control after every hub deploy), or the daily cron |
+| `hub` | Ingests each release's `build.json` and `record.json` into `data/` (its `data` branch, one commit), serves the API on Pages, and generates stores, proxy confs, k8s, quadlets, the mods index, the PRoot Apps index and build pages. `refresh.yml` runs hourly: stars, mods, PRoot Apps (proot-apps' `metadata.yml`), and pushes the store repos | Control dispatches its Deploy on fixed slots, at most nine an hour, when something changed: a release, a push to main, the refresh's new data. It publishes to `gh-pages` |
+| `site` | The Astro website: image pages, build pages, fleet board (live from control), docs and blog content collections | Control dispatches its Deploy on its slots, half a slot after the hub's: after the hub publishes, a push to main, and daily with `refresh_all`. It publishes to `gh-pages` |
 | `control` | A FastAPI GitHub App, one always-on container. It handles webhooks, fleet discovery, the scheduler, `/events`, OAuth sign-in, member actions, the site editor's back end and Discord | Push to main. Publish runs the checks and pushes `:latest`, and the deployment pulls it within 5 minutes |
 | `triage` | Retired on 2026-11-02: the AI first responder was a demonstration and is not carried to the live org. Nothing runs it; the repository is kept for reference | Nothing |
 | `docker-<name>` | One image each: `image.yml`, `Dockerfile` + `Dockerfile.aarch64`, `root/`. The README, AGENTS.md, LICENSE, FUNDING.yml, `root/donate.txt` and workflows are generated | A push to a live branch builds and releases. Any other branch builds to `dev/`, and a PR builds to `untrusted-pr/` |
@@ -55,18 +55,24 @@ the batch projects (proot-apps, selkies-layers, wheelie): one card each, then on
    `builder record` derives `record.json`: package tables, the diff against the previous release, a grype
    scan, base layers. A GitHub Release carries the bundle.
 5. **The workflow POSTs signed events to control** `/events`. Control posts to Discord (held at
-   "publishing" until the hub serves the build) and sends the hub `image-released`. Publish then deploys the
+   "publishing", amber and linking the run's summary, until the hub serves the build) and requests the hub's next
+   Deploy slot. Publish then deploys the
    image repo's own Pages from its Releases: the newest 5 builds per live branch, with their screenshots, test
    logs, file trees and package tables, which the site reads cross-origin. When the run completes, control
    attaches `run.json` and `logs.zip` to the Release, the permanent record of a build once it is older than
    the site's five.
 6. **The hub's Deploy** reconciles the whole org over GraphQL, ingests every release `data/` lacks, publishes
-   `data/` as the one commit of its `data` branch, renders the API and deploys Pages. From then on the build's
+   `data/` as the one commit of its `data` branch, renders the API and publishes it as the one commit of
+   `gh-pages`. Control dispatches it on fixed slots 400 s apart (at most nine an hour), only when something was
+   requested; every release since the last run rides on the next one. From then on the build's
    site page works: every build page is rendered in the browser from the hub API (`LiveBuildPage`, on the
    site's 404 page); the site emits no file per build or per run.
-7. **Control sends `hub-updated`** to the site, which rebuilds its image pages, lists and search.
-8. **Hourly,** the hub's `refresh.yml` reads stars, refreshes the mods index, and asks for a
-   Deploy.
+7. **Control turns the Discord message green** with the site link, and when the hub pushed something new to
+   `gh-pages`, requests the site's next slot (half a slot after the hub's). The site rebuilds its image pages,
+   lists and search. Neither the hub nor the site deploys on a push or a cron, and a build identical to what
+   `gh-pages` holds is not pushed. `/api/status.json` `deploys` on control shows what waits for which slot.
+8. **Hourly,** the hub's `refresh.yml` reads stars and refreshes the mods index, and commits what changed as
+   `Refresh data`, which control serves at the hub's next slot.
 
 `repos/workspace/docs/delivery-latency.md` measures this path.
 

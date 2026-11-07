@@ -37,11 +37,17 @@ head republishes the same `-lsN`, and the hub and site show it after their next 
 
 ## Refresh the hub
 
-Control already dispatches this hourly, so force one only when fresh data is needed now.
+Control dispatches the hub's and the site's Deploys on fixed slots, at most nine an hour each, whenever
+something changed, so a release or a push reaches them within about seven minutes without anyone asking. Check
+`deploys` in `https://ci.thelamer.duckdns.org:8443/api/status.json` first: it shows what is pending and the next
+slot. Force one only when control is down or fresh refreshed data is needed now; a hand dispatch counts against
+GitHub Pages' ten builds an hour.
 
-1. `gh workflow run deploy.yml -R linuxserver-playground/hub`, then `gh run watch` it to the end.
-2. Control relays `hub-updated` to the site after a successful Deploy. Confirm that a site Deploy started
-   within a few minutes (`gh run list -R linuxserver-playground/site --limit 3`), and watch it.
+1. For new stars or mods data, `gh workflow run refresh.yml -R linuxserver-playground/hub`: control serves its
+   commit at the next slot. Otherwise `gh workflow run deploy.yml -R linuxserver-playground/hub`, then
+   `gh run watch` it to the end.
+2. When that Deploy pushed to `gh-pages`, control requests the site's next slot. Confirm a site Deploy started
+   within about seven minutes (`gh run list -R linuxserver-playground/site --limit 3`), and watch it.
 3. Report both outcomes with links. On failure, show the failing step's log tail.
 
 ## Release a workflows change
@@ -103,15 +109,16 @@ like these when nothing else explains them. Offer it as an option only after the
    It fixes the symptom, not GitHub's cause. Get a yes before going on.
 4. **Reset.** Run `./harness pages reset <repo>` to print the plan, then `./harness pages reset <repo> --yes`. The
    command:
-   - deletes the Pages site and creates it again, deployed from Actions;
+   - deletes the Pages site and creates it again with the same source: from Actions for an image repository,
+     from the `gh-pages` branch for the hub and the site;
    - keeps the `github-pages` environment's branch rule as it was;
-   - dispatches the redeploy: the hub's or the site's `deploy.yml`, or an image repository's `build.yml` with
-     `reason=pages`, which rebuilds its site from the Releases and builds no image.
+   - redeploys: for the hub and the site, Pages builds `gh-pages` again on its own; for an image repository, it
+     dispatches `build.yml` with `reason=pages`, which rebuilds its site from the Releases and builds no image.
 
    Do not do it by hand: the guard stops a bare `gh api -X DELETE …/pages`.
 5. **Prove it.** Watch the redeploy to the end (`gh run list -R <repo> -L 2`, `gh run watch`), then run
-   `./harness pages check <repo>` again. For the hub, control's next successful Deploy clears its healing row and
-   sends `hub-updated`; confirm a site Deploy follows.
+   `./harness pages check <repo>` again. For the hub, control's next successful Deploy clears its healing row; a
+   site Deploy follows at its next slot when the hub published something new.
 6. **If it is still stuck after a reset,** stop: draft a GitHub support request with the runs and the check output
    (`./harness draft issue`). The person files it.
 
@@ -132,5 +139,5 @@ like these when nothing else explains them. Offer it as an option only after the
      (`build%2F<name>`, …). This needs the `delete:packages` scope.
 4. **Everything else follows on its own:**
    - control drops the repo on GitHub's `repository deleted` webhook;
-   - the hub's next Deploy removes its data (or force one, as above);
-   - the site rebuilds without its pages on the `hub-updated` that follows.
+   - the `repository deleted` webhook requests the hub's next Deploy slot, which removes its data;
+   - the site rebuilds without its pages at its own next slot.

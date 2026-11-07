@@ -26,7 +26,7 @@ Things that caught earlier agents and people out. Each one cost a wrong change o
   already released (or differs from it only in the pipeline's `[skip ci]` commits) publishes the same `-lsN`
   again when the upstream version is the same; a different upstream version, newer or older, is always a new
   release with the next `-lsN`, and the hub ingests the new record only when its `build.json` is an hour or more newer than the one it
-  holds; the site follows on the next `hub-updated`. So a proof build of an unchanged image shows up on the site
+  holds, at its next Deploy slot; the site follows at its own slot. So a proof build of an unchanged image shows up on the site
   later than the run finishes, and a `packages` run is the only kind that takes the next `-lsN` from the same
   head.
 - **Proof builds: heimdall, or filezilla for anything on the selkies path. Never cura.** heimdall (alpine-nginx)

@@ -978,17 +978,15 @@ pages_check() {
   served_epoch=$(epoch_of "$served")
   say "Served deploy: ${served:-unknown} (last-modified of the site root)"
   case "$name" in
-    hub)
-      local stamp run
+    hub | site)
+      # Both publish from gh-pages, and a Deploy that built nothing new pushes nothing: compare with that branch.
+      local stamp want
       stamp=$(curl -fsS --max-time 20 "${url%/}/deploy.json?harness=$(date +%s)" || true)
       say "Served deploy.json: ${stamp:-unreadable}"
-      run=$(gh run list -R "$full" -w Deploy --status success -L 1 --json databaseId,updatedAt -q '.[0] | "\(.databaseId) \(.updatedAt)"' || true)
-      say "Newest successful Deploy: ${run:-none}"
-      newest=${run#* }
-      ;;
-    site)
-      newest=$(gh run list -R "$full" -w Deploy --status success -L 1 --json updatedAt -q '.[0].updatedAt' || true)
-      say "Newest successful Deploy: ${newest:-none}"
+      want=$(gh api "repos/$full/contents/deploy.json?ref=gh-pages" -H 'Accept: application/vnd.github.raw+json' 2>/dev/null || true)
+      say "gh-pages deploy.json: ${want:-unreadable}"
+      newest=$(gh api "repos/$full/commits/gh-pages" --jq .commit.committer.date 2>/dev/null || true)
+      say "gh-pages committed: ${newest:-unknown}"
       ;;
     *)
       newest=$(gh api "repos/$full/releases?per_page=10" --jq '[.[].published_at] | max // empty' || true)
@@ -1009,7 +1007,7 @@ pages_check() {
 
 pages_reset() {
   need jq
-  local full="" yes=false arg owner role pages build_type cname policy
+  local full="" yes=false arg owner role pages build_type cname policy branch path from
   for arg in "$@"; do
     case "$arg" in
       --yes) yes=true ;;
@@ -1024,17 +1022,24 @@ pages_reset() {
   pages=$(gh api "repos/$full/pages") || die "$full has no Pages site to reset"
   build_type=$(jq -r .build_type <<<"$pages")
   cname=$(jq -r '.cname // empty' <<<"$pages")
-  [[ "$build_type" == workflow ]] || die "$full deploys Pages from a branch ($build_type), not from Actions: reset it by hand in Settings > Pages"
+  branch=$(jq -r '.source.branch // empty' <<<"$pages")
+  path=$(jq -r '.source.path // "/"' <<<"$pages")
+  if [[ "$build_type" == workflow ]]; then
+    from="deployed from Actions (build_type workflow)"
+  else
+    [[ -n "$branch" ]] || die "$full deploys Pages from a branch but names none: reset it by hand in Settings > Pages"
+    from="published from the $branch branch, folder $path (build_type legacy)"
+  fi
   policy=$(gh api "repos/$full/environments/github-pages" 2>/dev/null | jq -c .deployment_branch_policy || echo null)
   policy=${policy:-null}
 
   say "Reset of $full's Pages site:"
   say "  1. delete it (gh api -X DELETE repos/$full/pages): $(jq -r .html_url <<<"$pages") answers 404 until step 4 lands"
-  say "  2. create it again, deployed from Actions (build_type workflow)"
+  say "  2. create it again, $from"
   [[ -n "$cname" ]] && say "     and set its custom domain $cname again: GitHub issues a new certificate, and HTTPS can fail for up to an hour"
   say "  3. keep the github-pages environment's branch rule as it is now: $policy"
   case "${full#*/}" in
-    hub | site) say "  4. redeploy: gh workflow run deploy.yml -R $full" ;;
+    hub | site) say "  4. redeploy: none needed, Pages builds $branch again when the site is created" ;;
     docker-*) say "  4. redeploy: gh workflow run build.yml -R $full -f reason=pages (rebuilds the site from its Releases; builds nothing)" ;;
     *) say "  4. redeploy: not known for this repo; run its Pages workflow yourself" ;;
   esac
@@ -1046,12 +1051,14 @@ pages_reset() {
   gh api -X DELETE "repos/$full/pages" >/dev/null
   say "deleted"
   local tries=0
-  until gh api -X POST "repos/$full/pages" -f build_type=workflow >/dev/null 2>&1; do
+  local create=(-f build_type=workflow)
+  [[ "$build_type" == workflow ]] || create=(-f build_type=legacy -f "source[branch]=$branch" -f "source[path]=$path")
+  until gh api -X POST "repos/$full/pages" "${create[@]}" >/dev/null 2>&1; do
     tries=$((tries + 1))
-    (( tries < 6 )) || die "could not create $full's Pages site again: create it in Settings > Pages (source: GitHub Actions), then redeploy"
+    (( tries < 6 )) || die "could not create $full's Pages site again: create it in Settings > Pages ($from), then redeploy"
     sleep 5
   done
-  say "created again, deployed from Actions"
+  say "created again, $from"
   [[ -n "$cname" ]] && gh api -X PUT "repos/$full/pages" -f cname="$cname" >/dev/null && say "custom domain $cname set again"
   if [[ "$policy" == null ]]; then
     gh api -X PUT "repos/$full/environments/github-pages" --input - <<<'{"deployment_branch_policy":null}' >/dev/null
@@ -1060,7 +1067,10 @@ pages_reset() {
     say "github-pages environment now: $(gh api "repos/$full/environments/github-pages" | jq -c .deployment_branch_policy)"
   fi
   case "${full#*/}" in
-    hub | site) gh workflow run deploy.yml -R "$full" ;;
+    hub | site)
+      say "Pages builds $branch on its own now: gh api repos/$full/pages/builds/latest, then ./harness pages check $full"
+      return 0
+      ;;
     docker-*) gh workflow run build.yml -R "$full" -f reason=pages ;;
     *)
       say "Now run $full's Pages workflow yourself, then ./harness pages check $full"

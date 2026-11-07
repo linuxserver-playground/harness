@@ -58,8 +58,8 @@ change in several repos is a [contract-change](contract-change.md) instead.
 
 | Repo | Goes live | Follow up |
 | --- | --- | --- |
-| site | The Deploy on push | Check the page live |
-| hub | The Deploy on push | `curl` the changed endpoint. The site picks it up on `hub-updated` |
+| site | Control's next site slot after the push (within about seven minutes) | Check the page live |
+| hub | Control's next hub slot after the push (within about seven minutes) | `curl` the changed endpoint. The site picks it up at its next slot |
 | control | Publish, then the deployment pulls `:latest` within 5 minutes | Watch the Publish run (`gh run watch`). A red main ships nothing |
 | builder | `builder:latest` on push, about a minute after Publish reports success (the retag lands last) | The next image builds use it. Dispatch one small build to confirm (heimdall). A workflows change that needs this builder waits for the package's `latest` tag to be this commit before `v1` moves ([fleet-ops](fleet-ops.md)) |
 | workflows | Only when `v1` moves | The release-workflows steps in [fleet-ops](fleet-ops.md) |
